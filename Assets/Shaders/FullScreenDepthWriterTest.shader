@@ -1,4 +1,4 @@
-﻿Shader "ImORTAR/FullscreenDepthWriterTest"
+﻿Shader "ImOTAR/FullscreenDepthWriterTest"
 {
     
     SubShader
