@@ -1,10 +1,11 @@
 // Unity 2020 LTS / 2021 LTS + AR Foundation 4.1/4.2 + ARKit XR Plugin 4.x 想定
+using System;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.XR.ARFoundation;
 
 [RequireComponent(typeof(AROcclusionManager))]
-public class DepthRec : MonoBehaviour
+public class DepthRec : FrameProvider
 {
     [Header("AR Occlusion Manager を割当て")]
     [SerializeField] private AROcclusionManager occlusion;
@@ -14,6 +15,11 @@ public class DepthRec : MonoBehaviour
 
     private CommandBuffer cmd;
     private Material flipMaterial;
+    private DateTime lastUpdateTime;
+
+    // FrameProviderの抽象プロパティを実装
+    public override RenderTexture FrameTex => targetRT;
+    public override DateTime TimeStamp => lastUpdateTime;
 
     void Reset()
     {
@@ -32,6 +38,13 @@ public class DepthRec : MonoBehaviour
         }
         
         flipMaterial = new Material(shader);
+        
+        // 初期化時にテクスチャが設定されていることを通知
+        if (targetRT != null)
+        {
+            IsInitTexture = true;
+            OnFrameTexInitialized();
+        }
     }
 
     void OnEnable()
@@ -96,5 +109,9 @@ public class DepthRec : MonoBehaviour
 
         // 元に戻す
         Graphics.SetRenderTarget(prevColor, prevDepth);
+
+        // タイムスタンプを更新してティックアップ
+        lastUpdateTime = DateTime.Now;
+        TickUp();
     }
 }

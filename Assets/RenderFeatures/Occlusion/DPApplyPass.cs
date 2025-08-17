@@ -11,7 +11,7 @@ namespace RenderPass {
         private static readonly int TARGET_TEXTURE = Shader.PropertyToID("_TargetTexture");
 
         private readonly DPApplyFeature.MaterialSettings _settings;
-        private DepthProvider _depthProvider;
+        private CpuFrameProvider _depthProvider;
         private int _lastTick = -1;
         private Texture2D _currentDepthTexture;
         private Material _depthMaskMaterial;
@@ -23,7 +23,7 @@ namespace RenderPass {
             _settings = settings;
         }
         
-        public void SetDepthProvider(DepthProvider depthProvider) {
+        public void SetDepthProvider(CpuFrameProvider depthProvider) {
             _depthProvider = depthProvider;
         }
         

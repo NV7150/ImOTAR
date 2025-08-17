@@ -21,13 +21,13 @@ namespace RenderPass {
 
         [SerializeField]private MaterialSettings settings;
         private DPApplyPass _mMaterialApplyPass;
-        private DepthProvider _cachedDepthProvider;
+        private CpuFrameProvider _cachedDepthProvider;
 
         public override void Create() {
             _mMaterialApplyPass = new DPApplyPass(settings);
             
             // シーン内からDepthProviderを一回だけ検索
-            _cachedDepthProvider = FindFirstObjectByType<DepthProvider>();
+            _cachedDepthProvider = FindFirstObjectByType<CpuFrameProvider>();
             if (_cachedDepthProvider != null) {
                 _mMaterialApplyPass.SetDepthProvider(_cachedDepthProvider);
             }

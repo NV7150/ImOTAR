@@ -1,13 +1,13 @@
 using System;
 using UnityEngine;
 
-public abstract class GpuDepthProvider : MonoBehaviour {
+public abstract class CpuFrameProvider : MonoBehaviour {
     private readonly int TICK_MAX = 1024;
-    public abstract RenderTexture DepthTex{ get; }
+    public abstract Texture2D DepthTex{ get; }
     public abstract DateTime TimeStamp{ get; }
-    public event Action<RenderTexture> OnDepthTexInit;
+    public event Action<Texture2D> OnDepthTexInit;
 
-    public event Action<RenderTexture> OnDepthUpdated;
+    public event Action<Texture2D> OnDepthUpdated;
 
     public bool IsInitTexture{get; protected set;}
 

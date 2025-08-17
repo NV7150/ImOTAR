@@ -1,21 +1,34 @@
+using System;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.XR.ARFoundation;
 
 [RequireComponent(typeof(ARCameraManager))]
-public class CameraRec : MonoBehaviour
+public class CameraRec : FrameProvider
 {
     [SerializeField] private ARCameraBackground arCameraBackground;
     [SerializeField] private RenderTexture targetRT;
 
     private ARCameraManager camManager;
     private CommandBuffer cmd;
+    private DateTime lastUpdateTime;
     
     private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
+    
+    // FrameProviderの抽象プロパティを実装
+    public override RenderTexture FrameTex => targetRT;
+    public override DateTime TimeStamp => lastUpdateTime;
 
     void Awake()
     {
         camManager = GetComponent<ARCameraManager>();
+        
+        // 初期化時にテクスチャが設定されていることを通知
+        if (targetRT != null)
+        {
+            IsInitTexture = true;
+            OnFrameTexInitialized();
+        }
     }
 
     void OnEnable()
@@ -65,5 +78,9 @@ public class CameraRec : MonoBehaviour
         Graphics.ExecuteCommandBuffer(cmd);
 
         Graphics.SetRenderTarget(prevColor, prevDepth);
+        
+        // タイムスタンプを更新してティックアップ
+        lastUpdateTime = DateTime.Now;
+        TickUp();
     }
 }

@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 
-public class AquireDepthImageProvider : DepthProvider
+public class AquireDepthImageProvider : CpuFrameProvider
 {
     [SerializeField] private float updatePeriod = 0.5f;
     [SerializeField] private AROcclusionManager occlusionManager;
