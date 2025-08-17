@@ -50,7 +50,7 @@ namespace RenderPass {
                 #if UNITY_EDITOR
                 #else
                 Debug.LogWarning("DPApplyFeature: DepthProvider not found in scene");
-                _cachedDepthProvider = FindFirstObjectByType<DepthProvider>();
+                _cachedDepthProvider = FindFirstObjectByType<CpuFrameProvider>();
                 if (_cachedDepthProvider != null) {
                     _mMaterialApplyPass.SetDepthProvider(_cachedDepthProvider);
                 }
