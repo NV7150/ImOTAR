@@ -5,13 +5,13 @@ using UnityEngine;
 
 /// <summary>
 /// PromptDA深度推定のスケジューラー
-/// RGB・深度ストリームを同期し、PromptDAProcessorに処理を依頼する
+/// RGB・深度ストリーム（meters単位）を同期し、PromptDAProcessorに処理を依頼する
 /// </summary>
 public class PromptDAEstimator: FrameProvider
 {
     [Header("Input Sources")]
-    [SerializeField] private CameraRec cameraRec;     // RGB ストリーム
-    [SerializeField] private DepthRec depthRec;       // 深度ストリーム
+    [SerializeField] private FrameProvider cameraRec;     // RGB ストリーム
+    [SerializeField] private FrameProvider depthRec;       // 深度ストリーム（meters単位）
     [SerializeField] private PromptDAProcessor processor; // モデル処理
 
     [Header("Output")]
@@ -208,10 +208,10 @@ public class PromptDAEstimator: FrameProvider
             if (job.timestamp <= _latestOutputTimestamp)
             {
                 // 古い結果のテクスチャを解放
-                if (autoReleaseTextures && job.result != null)
-                {
-                    RenderTexture.ReleaseTemporary(job.result);
-                }
+                // if (autoReleaseTextures && job.result != null)
+                // {
+                //     RenderTexture.ReleaseTemporary(job.result);
+                // }
                 continue;
             }
             
@@ -236,10 +236,10 @@ public class PromptDAEstimator: FrameProvider
             Graphics.CopyTexture(job.result, outputRT);
             
             // オプション: 使用済みテクスチャを解放
-            if (autoReleaseTextures)
-            {
-                RenderTexture.ReleaseTemporary(job.result);
-            }
+            // if (autoReleaseTextures)
+            // {
+            //     RenderTexture.ReleaseTemporary(job.result);
+            // }
         }
     }
 
@@ -255,10 +255,10 @@ public class PromptDAEstimator: FrameProvider
         while (_completedJobs.Count > 0)
         {
             var job = _completedJobs.Dequeue();
-            if (autoReleaseTextures && job.result != null)
-            {
-                RenderTexture.ReleaseTemporary(job.result);
-            }
+            // if (autoReleaseTextures && job.result != null)
+            // {
+            //     RenderTexture.ReleaseTemporary(job.result);
+            // }
         }
     }
 
