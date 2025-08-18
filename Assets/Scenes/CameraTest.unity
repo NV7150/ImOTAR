@@ -689,8 +689,8 @@ MonoBehaviour:
   processor: {fileID: 933328834}
   outputRT: {fileID: 8400000, guid: 44200fc5c4ed8458fac853e04cefe105, type: 2}
   maxTimeSyncDifferenceMs: 100
-  maxQueueSize: 5
-  maxProcessPerFrame: 5
+  maxQueueSize: 3
+  maxProcessPerFrame: 2
   autoReleaseTextures: 1
 --- !u!4 &933328836
 Transform:
@@ -738,7 +738,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   testImageTexture: {fileID: 2800000, guid: 0ca93ad875f084ce99bcd2b0870b50bb, type: 3}
   targetRT: {fileID: 8400000, guid: 5b381c7a77b1543eb94f594b177c9626, type: 2}
-  intervalMs: 1000
+  intervalMs: 300
   autoStart: 1
   loop: 1
 --- !u!4 &974415103
@@ -1474,7 +1474,7 @@ MonoBehaviour:
   testDepthTexture: {fileID: 2800000, guid: d701d6d54440d450fbc6086d8cef5a0d, type: 3}
   targetRT: {fileID: 8400000, guid: ca2be42c7a7d9417f81e0d80b93bddce, type: 2}
   depthConversionMaterial: {fileID: 2100000, guid: d7b2c3471673d4db7827cd8f938dee56, type: 2}
-  intervalMs: 1000
+  intervalMs: 300
   autoStart: 1
   loop: 1
 --- !u!4 &1853036973
