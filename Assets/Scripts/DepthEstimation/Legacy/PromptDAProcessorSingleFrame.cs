@@ -9,7 +9,7 @@ using Unity.Sentis;
 /// - TrySubmit: CB に ToTensor → ScheduleWorker → RenderToTexture → ROI → Fence を積んで即 return
 /// - フェンスは Async 対応なら AsyncQueue、非対応なら CPU 同期タイプを発行（.passed が常に安全）
 /// </summary>
-public class PromptDAProcessor : MonoBehaviour
+public class PromptDAProcessorSingleFrame  : MonoBehaviour
 {
     [Header("Model Configuration")]
     [SerializeField] private ModelAsset promptDaOnnx;

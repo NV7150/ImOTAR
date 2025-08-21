@@ -8,12 +8,12 @@ using UnityEngine.Rendering;
 /// - RGB/Depth を同期し、PromptDAProcessor に Submit（非待機）
 /// - 適用は GPU 内で同期（Async 対応時）または単一キュー順序に依存（非対応時）
 /// </summary>
-public class PromptDAEstimator : FrameProvider
+public class PromptDAEstimatorSingleFrame : FrameProvider
 {
     [Header("Input Sources")]
     [SerializeField] private FrameProvider cameraRec;     // RGB
     [SerializeField] private FrameProvider depthRec;      // Depth (meters)
-    [SerializeField] private PromptDAProcessor processor; // モデル処理
+    [SerializeField] private PromptDAProcessorSingleFrame processor; // モデル処理
 
     [Header("Output")]
     [SerializeField] private RenderTexture outputRT;
@@ -42,7 +42,7 @@ public class PromptDAEstimator : FrameProvider
     private FrameData _latestDepth;
 
     // In-flight（GPU実行中）ジョブ
-    private readonly List<PromptDAProcessor.InflightJob> _inflight = new();
+    private readonly List<PromptDAProcessorSingleFrame.InflightJob> _inflight = new();
 
     // 出力の最新時刻
     private DateTime _latestOutputTimestamp = DateTime.MinValue;

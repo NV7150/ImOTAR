@@ -3,13 +3,11 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.XR.ARFoundation;
 
-[RequireComponent(typeof(ARCameraManager))]
 public class CameraRec : FrameProvider
 {
+    [SerializeField] private ARCameraManager camManager;
     [SerializeField] private ARCameraBackground arCameraBackground;
     [SerializeField] private RenderTexture targetRT;
-
-    private ARCameraManager camManager;
     private CommandBuffer cmd;
     private DateTime lastUpdateTime;
     
@@ -21,8 +19,6 @@ public class CameraRec : FrameProvider
 
     void Awake()
     {
-        camManager = GetComponent<ARCameraManager>();
-        
         // 初期化時にテクスチャが設定されていることを通知
         if (targetRT != null)
         {

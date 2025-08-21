@@ -4,7 +4,6 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.XR.ARFoundation;
 
-[RequireComponent(typeof(AROcclusionManager))]
 public class DepthRec : FrameProvider
 {
     [Header("AR Occlusion Manager を割当て")]
@@ -21,10 +20,7 @@ public class DepthRec : FrameProvider
     public override RenderTexture FrameTex => targetRT;
     public override DateTime TimeStamp => lastUpdateTime;
 
-    void Reset()
-    {
-        occlusion = GetComponent<AROcclusionManager>();
-    }
+
 
     void Start()
     {
