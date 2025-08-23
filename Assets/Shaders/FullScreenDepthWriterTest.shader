@@ -94,10 +94,9 @@
                 
                 output.depth = nlDepth;
                 
-                // デバッグ用：深度値を赤色で可視化
-                // rawDepthが小さい（近い）ほど明るい赤、大きい（遠い）ほど黒
-                float depthVisualization = 1.0 - saturate(rawDepth);
-                output.color = float4(depthVisualization, 0.0, 0.0, 1.0); // 赤色チャンネルのみ使用
+                // デバッグ用：非線形深度(nlDepth)を可視化（0..1）
+                float vis = saturate(nlDepth);
+                output.color = float4(vis, vis, vis, 1.0);
                 
                 
                 return output;

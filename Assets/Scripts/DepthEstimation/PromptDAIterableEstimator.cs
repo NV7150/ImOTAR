@@ -209,7 +209,6 @@ public class PromptDAIterableEstimator : FrameProvider
         // 完了したら適用→FrameProvider更新→次へ
         if (processor.IsComplete)
         { 
-            Debug.Log("Completed");
             // 結果は Processor が outputRT へ直接書く
             if (processor.ResultRT != null)
             {

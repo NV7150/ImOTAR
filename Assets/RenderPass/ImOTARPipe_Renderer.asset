@@ -26,7 +26,8 @@ MonoBehaviour:
     probeVolumeBlendStatesCS: {fileID: 0}
   m_RendererFeatures:
   - {fileID: 4107083995189926854}
-  m_RendererFeatureMap: c6dbfc23224bff38
+  - {fileID: 5521999881933457755}
+  m_RendererFeatureMap: c6dbfc23224bff385b8964c4a215a24c
   m_UseNativeRenderPass: 0
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
@@ -65,3 +66,20 @@ MonoBehaviour:
   m_Name: ARBackgroundRendererFeature
   m_EditorClassIdentifier: 
   m_Active: 1
+--- !u!114 &5521999881933457755
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 06d948ee4cb8546ecbeac8fd651c710d, type: 3}
+  m_Name: RTApplyFeature
+  m_EditorClassIdentifier: 
+  m_Active: 1
+  settings:
+    applyMaterial: {fileID: 2100000, guid: 14b9e1fe043ec4e749df915dad7a421b, type: 2}
+    sourceRT: {fileID: 8400000, guid: 69a09363f9697401c91334d64086c3dd, type: 2}
+    runOnEditor: 0
