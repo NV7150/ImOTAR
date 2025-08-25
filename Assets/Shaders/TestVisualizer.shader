@@ -80,8 +80,12 @@ Shader "ImOTAR/TestVisualizer"
                 // Min-Max 正規化（0=黒, 1=白）
                 float denom = max(1e-6, (_Max - _Min));
                 float t = saturate((depth_m - _Min) / denom);
+                float4 gray = float4(t, t, t, 1.0) * i.color;
 
-                return float4(t, t, t, 1.0) * i.color;
+                // depth_m < 0 を赤で可視化（分岐なし）
+                float valid = step(0.0, depth_m);
+                float4 red = float4(1.0, 0.0, 0.0, 1.0);
+                return lerp(red, gray, valid);
             }
             ENDCG
         }

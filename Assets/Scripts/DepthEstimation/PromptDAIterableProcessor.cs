@@ -23,6 +23,9 @@ public class PromptDAIterableProcessor : MonoBehaviour
 
     [Header("Processing Settings")]
     [SerializeField] private BackendType backendType = BackendType.GPUCompute;
+    
+    [Header("Completion")]
+    [SerializeField, Min(0)] private int completionFrameDelay = 1; // N フレーム遅延で完了判定
 
     [Header("Debug")]
     [SerializeField] private bool verboseLogging = true;
@@ -57,15 +60,19 @@ public class PromptDAIterableProcessor : MonoBehaviour
     // 実行ステート
     private IEnumerator _iter;          // Worker.ScheduleIterable の IEnumerator
     private bool _running = false;      // MoveNext を残している
-    private bool _finalized = false;    // 出力CBを流した
-    private GraphicsFence _finalFence;  // 出力完了検知（CPUSynchronisation）
+    // 世代（ジョブ）管理
+    private System.Guid _currentJobId = System.Guid.Empty;
+    private System.Guid _finalizedJobId = System.Guid.Empty;
+    private System.Guid _completedJobId = System.Guid.Empty;
+    private int _finalizeFrame = -1;    // Finalize を発行したフレーム番号（finalizedJobId用）
     private bool _supportsAsyncCompute;
 
     // メタ
     public bool IsInitialized { get; private set; }
-    public bool IsRunning   => _running || (_finalized && _finalFence.passed == false);
-    public bool IsComplete  => _finalized && _finalFence.passed;
-    public bool IsFinalized => _finalized;
+    // 公開するのは世代IDのみ（boolではなく世代の状態で判定させる）
+    public System.Guid CurrentJobId   => _currentJobId;
+    public System.Guid FinalizedJobId => _finalizedJobId;
+    public System.Guid CompletedJobId => _completedJobId;
     public DateTime CurrentTimestamp { get; private set; }
     public RenderTexture ResultRT => outputRT;
 
@@ -103,7 +110,7 @@ public class PromptDAIterableProcessor : MonoBehaviour
             if (verboseLogging) Debug.LogWarning($"{logPrefix} Begin: invalid (IsInit={IsInitialized}, rgbNull={rgbInput==null}, depNull={depthInput==null})");
             return false;
         }
-        if (IsRunning)
+        if (_running)
         {
             if (verboseLogging) Debug.LogWarning($"{logPrefix} Begin: rejected (already running)");
             return false; // 単一ジョブ前提
@@ -151,9 +158,7 @@ public class PromptDAIterableProcessor : MonoBehaviour
         feeds[_promptInputIndex] = _promptTensorGPU;
         _iter = _worker.ScheduleIterable(feeds);
 
-        _running    = true;
-        _finalized  = false;
-        _finalFence = default;
+        _running       = true;
         CurrentTimestamp = timestamp;
 
         if (verboseLogging)
@@ -185,29 +190,31 @@ public class PromptDAIterableProcessor : MonoBehaviour
 
             if (!hasMore)
             {
-                // ---- 全レイヤのスケジューリングが終わった。出力をRTへ書き出し → フェンス発行 ----
+                // ---- 全レイヤのスケジューリングが終わった。出力をRTへ書き出し ----
                 var outRef = _worker.PeekOutput() as Tensor<float>;
                 using (var cb = new CommandBuffer { name = "PromptDA Iterable Finalize" })
                 {
+                    // Clear destination to a known value (-1) to avoid stale pixels outside copy rect
+                    if (outputRT != null)
+                    {
+                        cb.SetRenderTarget(outputRT);
+                        cb.ClearRenderTarget(false, true, new Color(-1f, -1f, -1f, 1f));
+                    }
                     cb.RenderToTexture(outRef, _fullOutputRT);
                     if (outputRT != null)
                     {
                         cb.CopyTexture(_fullOutputRT, 0,0, _padX,_padY, _newW,_newH, outputRT, 0,0, 0,0);
                     }
-                    var stages =
-                        SynchronisationStageFlags.PixelProcessing | SynchronisationStageFlags.ComputeProcessing;
-                    
-
-                    _finalFence = cb.CreateGraphicsFence(GraphicsFenceType.CPUSynchronisation, stages);
                     Graphics.ExecuteCommandBuffer(cb);
                 }
 
                 _running   = false;
-                _finalized = true;
+                _finalizedJobId = _currentJobId;
+                _finalizeFrame = Time.frameCount;
                 if (verboseLogging)
                 {
-                    bool ok = TryGetFencePassed(out var p);
-                    Debug.Log($"{logPrefix} Finalize: frame={Time.frameCount}, finalized={_finalized}, fenceOk={ok}, fencePassed={p}");
+                    var p = HasDelayElapsed();
+                    Debug.Log($"{logPrefix} Finalize: frame={Time.frameCount}, finalized={(_finalizedJobId!=System.Guid.Empty)}, passed={p}");
                 }
                 break;
             }
@@ -216,55 +223,34 @@ public class PromptDAIterableProcessor : MonoBehaviour
         // if(_finalFence.passed)
         //     Debug.Log("passed");
 
-        if (verboseLogging && _finalized)
-            Debug.Log($"{logPrefix} Step: advanced={advanced}, running={_running}, finalized={_finalized}, passed={_finalFence.passed})");
+        if (verboseLogging && _finalizedJobId != System.Guid.Empty)
+        {
+            var passed = HasDelayElapsed();
+            Debug.Log($"{logPrefix} Step: advanced={advanced}, running={_running}, finalized={(_finalizedJobId!=System.Guid.Empty)}, passed={passed})");
+        }
     }
 
     /// <summary> 完了後に内部ステートを初期化（次ジョブ用） </summary>
     public void ResetForNext()
     {
-        if (!_finalized || !_finalFence.passed)
+        if (_finalizedJobId == System.Guid.Empty || !HasDelayElapsed())
         {
             if (verboseLogging)
-                Debug.Log($"{logPrefix} ResetForNext: ignored (finalized={_finalized}, passed={_finalFence.passed})");
+                Debug.Log($"{logPrefix} ResetForNext: ignored (finalized={(_finalizedJobId!=System.Guid.Empty)}, passed={HasDelayElapsed()})");
             return;
         }
 
         _iter = null;
         _running = false;
-        _finalized = false;
-        _finalFence = default;
+        _finalizedJobId = System.Guid.Empty;
+        _completedJobId = System.Guid.Empty;
+        _finalizeFrame = -1;
 
         if (verboseLogging)
             Debug.Log($"{logPrefix} ResetForNext: cleared (frame={Time.frameCount})");
     }
 
     // ---- Diagnostics -------------------------------------------------------
-
-    /// <summary>
-    /// 安全にフェンスの passed を取得する（未初期化やプラットフォーム差異での例外を避ける）
-    /// </summary>
-    public bool TryGetFencePassed(out bool passed)
-    {
-        passed = false;
-        if (!_finalized)
-        {
-            // フェンス未作成状態は false を返し、呼び出し自体は成功扱い
-            return true;
-        }
-
-        try
-        {
-            passed = _finalFence.passed;
-            return true;
-        }
-        catch (Exception e)
-        {
-            if (verboseLogging)
-                Debug.LogWarning($"{logPrefix} TryGetFencePassed exception: {e.Message}");
-            return false;
-        }
-    }
 
     // ---- 内部ヘルパ -------------------------------------------------------
 
@@ -362,5 +348,33 @@ public class PromptDAIterableProcessor : MonoBehaviour
         newH -= newH % multiple;
         padX = (dstW - newW) / 2;
         padY = (dstH -newH) / 2;
+    }
+
+    // ---- Completion helper (N-frame delay) --------------------------------
+    private bool HasDelayElapsed()
+    {
+        if (_finalizedJobId == System.Guid.Empty || _finalizeFrame < 0) return false;
+        int wait = Mathf.Max(0, completionFrameDelay);
+        return (Time.frameCount - _finalizeFrame) >= wait;
+    }
+
+    // ---- Job ID (Guid) API ------------------------------------------------
+    public void SetJobId(System.Guid jobId)
+    {
+        _currentJobId = jobId;
+        if (verboseLogging) Debug.Log($"{logPrefix} SetJobId: {_currentJobId}");
+    }
+
+    /// <summary>
+    /// Finalize済みのジョブを、遅延経過後にCompleteへ昇格（1回だけtrue）。
+    /// </summary>
+    public bool TryPromoteCompleted()
+    {
+        if (_finalizedJobId == System.Guid.Empty) return false;
+        if (_completedJobId == _finalizedJobId) return false;
+        if (!HasDelayElapsed()) return false;
+        _completedJobId = _finalizedJobId;
+        if (verboseLogging) Debug.Log($"{logPrefix} Complete: jobId={_completedJobId}");
+        return true;
     }
 }

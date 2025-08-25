@@ -56,7 +56,6 @@ namespace RenderPass {
             }
 
             // Import external RenderTexture (R32_Float expected)
-            Debug.Log($"[RTApplyPass] ImportTexture({_settings.SourceRT.name})");
             var imported = renderGraph.ImportTexture(RTHandles.Alloc(_settings.SourceRT));
 
             TextureHandle depthTextureToUse = imported;

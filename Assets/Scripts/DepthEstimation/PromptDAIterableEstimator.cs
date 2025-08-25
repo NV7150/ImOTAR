@@ -9,8 +9,7 @@ using UnityEngine.Rendering;
 /// - 完了(IsComplete)後に出力へ CopyTexture → FrameProvider更新(TickUp)
 /// - 実行中に来た新規フレームは latest-wins で1本だけペンディング
 /// </summary>
-public class PromptDAIterableEstimator : FrameProvider
-{
+public class PromptDAIterableEstimator : AsyncFrameProvider {
     [Header("Input Sources")]
     [SerializeField] private FrameProvider cameraRec;     // RGB
     [SerializeField] private FrameProvider depthRec;      // Depth(meters)
@@ -49,53 +48,45 @@ public class PromptDAIterableEstimator : FrameProvider
 
     // FrameProviderメタ
     private DateTime _lastUpdateTime;
+    private System.Guid _currentJobId = System.Guid.Empty;
     public override RenderTexture FrameTex => processor != null ? processor.ResultRT : null;
     public override DateTime TimeStamp => _lastUpdateTime;
 
-    void Start()
-    {
+    void Start() {
         SetupInputSubscriptions();
 
-        if (processor != null && processor.ResultRT != null)
-        {
+        if (processor != null && processor.ResultRT != null) {
             IsInitTexture = true;
             OnFrameTexInitialized();
         }
 
-        if (verboseLogging)
-        {
+        if (verboseLogging) {
             Debug.Log($"{logPrefix} Start: stepsPerFrame={stepsPerFrame}, platform={Application.platform}");
         }
     }
 
     void OnEnable() => SetupInputSubscriptions();
 
-    void OnDisable()
-    {
+    void OnDisable() {
         if (cameraRec != null) cameraRec.OnFrameUpdated -= OnRgbFrameReceived;
         if (depthRec  != null) depthRec.OnFrameUpdated  -= OnDepthFrameReceived;
     }
 
-    void SetupInputSubscriptions()
-    {
-        if (cameraRec != null)
-        {
+    void SetupInputSubscriptions() {
+        if (cameraRec != null) {
             cameraRec.OnFrameUpdated -= OnRgbFrameReceived;
             cameraRec.OnFrameUpdated += OnRgbFrameReceived;
         }
-        if (depthRec != null)
-        {
+        if (depthRec != null) {
             depthRec.OnFrameUpdated -= OnDepthFrameReceived;
             depthRec.OnFrameUpdated += OnDepthFrameReceived;
         }
-        if (verboseLogging)
-        {
+        if (verboseLogging) {
             // Debug.Log($"{logPrefix} SetupInputSubscriptions: cameraRec={(cameraRec!=null)}, depthRec={(depthRec!=null)}");
         }
     }
 
-    void OnRgbFrameReceived(RenderTexture rgbFrame)
-    {
+    void OnRgbFrameReceived(RenderTexture rgbFrame) {
         _latestRgb = new FrameData
         {
             timestamp      = cameraRec.TimeStamp,
@@ -108,8 +99,7 @@ public class PromptDAIterableEstimator : FrameProvider
         TryKickOrPend();
     }
 
-    void OnDepthFrameReceived(RenderTexture depthFrame)
-    {
+    void OnDepthFrameReceived(RenderTexture depthFrame) {
         _latestDepth = new FrameData
         {
             timestamp      = depthRec.TimeStamp,
@@ -122,23 +112,19 @@ public class PromptDAIterableEstimator : FrameProvider
         TryKickOrPend();
     }
 
-    void TryKickOrPend()
-    {
-        if (!_latestRgb.isValid || !_latestDepth.isValid)
-        {
-            // if (verboseLogging) Debug.Log($"{logPrefix} TryKickOrPend: waiting other stream (rgbValid={_latestRgb.isValid}, depValid={_latestDepth.isValid})");
+    void TryKickOrPend() {
+        if (!_latestRgb.isValid || !_latestDepth.isValid) {
+            if (verboseLogging) Debug.Log($"{logPrefix} TryKickOrPend: waiting other stream (rgbValid={_latestRgb.isValid}, depValid={_latestDepth.isValid})");
             return;
         }
 
         var dtMs = Mathf.Abs((float)(_latestRgb.rgbTimestamp - _latestDepth.depthTimestamp).TotalMilliseconds);
-        if (dtMs > maxTimeSyncDifferenceMs)
-        {
-            // if (verboseLogging) Debug.Log($"{logPrefix} TryKickOrPend: drop (dtMs={dtMs:0.0} > {maxTimeSyncDifferenceMs})");
+        if (dtMs > maxTimeSyncDifferenceMs) {
+            if (verboseLogging) Debug.Log($"{logPrefix} TryKickOrPend: drop (dtMs={dtMs:0.0} > {maxTimeSyncDifferenceMs})");
             return;
         }
-        if (processor == null || !processor.IsInitialized || processor.ResultRT == null)
-        {
-            // if (verboseLogging) Debug.LogWarning($"{logPrefix} TryKickOrPend: invalid state (procNull={processor==null}, procInit={processor?.IsInitialized}, outRTNull={outputRT==null})");
+        if (processor == null || !processor.IsInitialized || processor.ResultRT == null) {
+            if (verboseLogging) Debug.LogWarning($"{logPrefix} TryKickOrPend: invalid state (procNull={processor==null}, procInit={processor?.IsInitialized}, outRTNull={processor?.ResultRT==null})");
             return;
         }
 
@@ -152,26 +138,25 @@ public class PromptDAIterableEstimator : FrameProvider
             isValid        = true
         };
 
-        if (processor.IsRunning)
-        {
+        // 実行中かどうかは内部フラグではなく、Finalized/Completedから推定
+        bool isRunningLike = (processor.FinalizedJobId == System.Guid.Empty) && (processor.CurrentJobId != System.Guid.Empty);
+        if (isRunningLike) {
             // 実行中 → ペンディングへ（最新勝ち）
             _pending = frame;
             _hasPending = true;
             // if (verboseLogging) Debug.Log($"{logPrefix} TryKickOrPend: queued pending (ts={frame.timestamp:HH:mm:ss.fff})");
-        }
-        else
-        {
+        } else {
             // 空いていれば即開始
-            if (processor.Begin(frame.rgbFrame, frame.depthFrame, frame.timestamp))
-            {
+            if (processor.Begin(frame.rgbFrame, frame.depthFrame, frame.timestamp)) {
                 _hasPending = false;
+                _currentJobId = ProcessStart();
+                processor.SetJobId(_currentJobId);
+                if (verboseLogging) Debug.Log($"{logPrefix} Begin OK: jobId={_currentJobId}, ts={frame.timestamp:HH:mm:ss.fff}");
                 // if (verboseLogging) Debug.Log($"{logPrefix} TryKickOrPend: Begin OK (ts={frame.timestamp:HH:mm:ss.fff})");
-            }
-            else
-            {
+            } else {
                 _pending = frame;
                 _hasPending = true;
-                // if (verboseLogging) Debug.LogWarning($"{logPrefix} TryKickOrPend: Begin rejected -> pending");
+                if (verboseLogging) Debug.LogWarning($"{logPrefix} Begin rejected -> pending");
             }
         }
 
@@ -179,62 +164,59 @@ public class PromptDAIterableEstimator : FrameProvider
         _latestDepth.isValid = false;
     }
 
-    void Update()
-    {
+    void Update() {
         if (processor == null || !processor.IsInitialized) return;
 
         // 開発時のみ、フェンス状態を安全に監視（例外耐性あり）
         #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        if (verboseLogging && processor != null)
-        {
-            bool ok = processor.TryGetFencePassed(out var fencePassed);
-            if ((Time.frameCount % 15) == 0)
-            {
-                Debug.Log($"{logPrefix} Monitor: running={processor.IsRunning}, finalized={processor.IsFinalized}, complete={processor.IsComplete}, fenceOk={ok}, fencePassed={fencePassed}");
+        if (verboseLogging && processor != null) {
+            if ((Time.frameCount % 15) == 0) {
+                Debug.Log($"{logPrefix} Monitor: current={processor.CurrentJobId}, finalized={processor.FinalizedJobId}, completed={processor.CompletedJobId}");
             }
         }
         #endif
 
-        // 実行中なら所定ステップだけ前進
-        if (processor.IsRunning)
-        {
+        // 実行中なら所定ステップだけ前進（CurrentJobIdがセットされている間）
+        bool isRunningLike2 = (processor.CurrentJobId != System.Guid.Empty);
+        if (isRunningLike2) {
             int n = Mathf.Max(1, stepsPerFrame);
             processor.Step(n);
-        }
-        else
-        {
+            if (verboseLogging) Debug.Log($"{logPrefix} Step: n={n}, running={isRunningLike2}");
+        } else {
             // if (verboseLogging) Debug.Log($"{logPrefix} Update: processor not running (complete={processor.IsComplete})");
         }
 
-        // 完了したら適用→FrameProvider更新→次へ
-        if (processor.IsComplete)
-        { 
+        // finalize→complete昇格
+        processor.TryPromoteCompleted();
+
+        // 完了したら適用→Async通知(End)→次へ
+        bool isCompleteLike = (processor.CompletedJobId != System.Guid.Empty);
+        if (isCompleteLike) { 
             // 結果は Processor が outputRT へ直接書く
-            if (processor.ResultRT != null)
-            {
+            if (processor.ResultRT != null) {
                 _lastUpdateTime = DateTime.UtcNow;
-                TickUp();
+                if (_currentJobId != System.Guid.Empty) {
+                    if (verboseLogging) Debug.Log($"{logPrefix} Complete: calling ProcessEnd for jobId={_currentJobId}");
+                    ProcessEnd(_currentJobId);
+                    _currentJobId = System.Guid.Empty;
+                }
 
                 if (verboseLogging) Debug.Log($"{logPrefix} Apply: outputRT updated at frame={Time.frameCount}, time={Time.unscaledTime:0.000}");
-            }
-            else
-            {
+            } else {
                 if (verboseLogging) Debug.LogWarning($"{logPrefix} Apply: skip (ResultRT null={processor.ResultRT==null})");
             }
 
-            // 次ジョブのために状態を初期化
-            processor.ResetForNext();
+            // 次ジョブへ進む。Processorは世代状態を保持し続ける（リセットしない）
 
             // ペンディングがあればキック
-            if (_hasPending)
-            {
-                if (processor.Begin(_pending.rgbFrame, _pending.depthFrame, _pending.timestamp))
-                {
+            if (_hasPending) {
+                if (processor.Begin(_pending.rgbFrame, _pending.depthFrame, _pending.timestamp)) {
                     if (verboseLogging) Debug.Log($"{logPrefix} Begin (from pending): ts={_pending.timestamp:HH:mm:ss.fff}");
+                    _currentJobId = ProcessStart();
+                    processor.SetJobId(_currentJobId);
+                    if (verboseLogging) Debug.Log($"{logPrefix} Pending OK: jobId={_currentJobId}");
                     _hasPending = false;
-                }
-                else
-                {
+                } else {
                     if (verboseLogging) Debug.LogWarning($"{logPrefix} Begin (from pending): rejected; will retry on next update");
                 }
             }
