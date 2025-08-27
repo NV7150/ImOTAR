@@ -2,11 +2,12 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
+using System;
 
 [DisallowMultipleComponent]
 public class RotationCorrector : AsyncFrameProvider {
     [Header("Inputs")]
-    [SerializeField] private MotionObtainBase motionSource;
+    [SerializeField] private MotionObtain motionSource;
     [SerializeField] private AsyncFrameProvider sourceProvider; // Completed source provider
 
     [Header("Output (this FrameProvider)")]
@@ -151,7 +152,11 @@ public class RotationCorrector : AsyncFrameProvider {
             if (verboseLogging) Debug.LogWarning($"{logPrefix} Skip Process: intrinsics not ready");
             return;
         }
-        var abs = motionSource.AbsoluteQuat;
+        if (!motionSource.TryGetLatestData<AbsoluteRotationData>(out var absSample)){
+            if (verboseLogging) Debug.LogWarning($"{logPrefix} Process: no absolute rotation available");
+            return;
+        }
+        var abs = absSample.Rotation;
         // Projective warp expects mapping current->source: R = C0^-1 * C
         Quaternion r = Quaternion.Inverse(_sourcePoseAtStart) * abs;
         Matrix4x4 R = Matrix4x4.Rotate(r);
@@ -192,7 +197,10 @@ public class RotationCorrector : AsyncFrameProvider {
 
     // ---- Source async event handlers ----
     private void OnSourceJobStarted(System.Guid jobId){
-        var pose = motionSource != null ? motionSource.AbsoluteQuat : Quaternion.identity;
+        Quaternion pose = Quaternion.identity;
+        if (motionSource != null && motionSource.TryGetLatestData<AbsoluteRotationData>(out var startSample)){
+            pose = startSample.Rotation;
+        }
         _startPoseByJobId[jobId] = pose;
         if (verboseLogging) {
             var e = pose.eulerAngles;
@@ -228,7 +236,7 @@ public class RotationCorrector : AsyncFrameProvider {
         }
         if (_capturedSource != null){
             if (_capturedSource.IsCreated()) _capturedSource.Release();
-            Object.Destroy(_capturedSource);
+            UnityEngine.Object.Destroy(_capturedSource);
             _capturedSource = null;
         }
         var desc = src.descriptor;

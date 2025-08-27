@@ -29,8 +29,7 @@ public class PromptDAIterableEstimator : AsyncFrameProvider {
     [SerializeField] private string logPrefix = "[PromptDA-EST]";
 
     // 入力同期
-    private struct FrameData
-    {
+    private struct FrameData {
         public DateTime timestamp;
         public RenderTexture rgbFrame;
         public RenderTexture depthFrame;
@@ -100,8 +99,7 @@ public class PromptDAIterableEstimator : AsyncFrameProvider {
     }
 
     void OnDepthFrameReceived(RenderTexture depthFrame) {
-        _latestDepth = new FrameData
-        {
+        _latestDepth = new FrameData {
             timestamp      = depthRec.TimeStamp,
             depthFrame     = depthFrame,
             rgbTimestamp   = DateTime.MinValue,

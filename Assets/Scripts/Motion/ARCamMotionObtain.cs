@@ -12,13 +12,9 @@ public class ARCamMotionObtain : MotionObtainBase {
     private Vector3 _prevPosition = Vector3.zero;
     private Vector3 _lastFramePositionDelta = Vector3.zero;
 
-    public override bool RotationEnabled => true;
-    public override Quaternion AbsoluteQuat => cameraTransform != null ? cameraTransform.rotation : Quaternion.identity;
-    public override Quaternion LastQuatDif => _lastFrameRotationDelta;
+    // History is recorded via base.Record<T>()
 
-    public override bool PositionEnabled => true;
-    public override Vector3 AbsolutePosition => cameraTransform != null ? cameraTransform.position : Vector3.zero;
-    public override Vector3 LastPositionDif => _lastFramePositionDelta;
+    // Capabilities are now queried via TryGetLatestData<T>
 
     private void Awake() {
         if (cameraTransform == null) {
@@ -36,6 +32,7 @@ public class ARCamMotionObtain : MotionObtainBase {
         _hasPrev = false;
         _lastFrameRotationDelta = Quaternion.identity;
         _lastFramePositionDelta = Vector3.zero;
+        ClearAllHistory();
     }
 
     private void Update() {
@@ -56,6 +53,9 @@ public class ARCamMotionObtain : MotionObtainBase {
         _lastFrameRotationDelta = Quaternion.Inverse(_prevRotation) * currRot;
         _lastFramePositionDelta = currPos - _prevPosition;
 
+        Record(new AbsoluteRotationData(System.DateTime.UtcNow, currRot));
+        Record(new RotationDeltaData(System.DateTime.UtcNow, _lastFrameRotationDelta));
+
         _prevRotation = currRot;
         _prevPosition = currPos;
     }
@@ -67,7 +67,11 @@ public class ARCamMotionObtain : MotionObtainBase {
         _lastFrameRotationDelta = Quaternion.identity;
         _lastFramePositionDelta = Vector3.zero;
         _hasPrev = true;
+        Record(new AbsoluteRotationData(System.DateTime.UtcNow, cameraTransform.rotation));
+        Record(new RotationDeltaData(System.DateTime.UtcNow, Quaternion.identity));
     }
+
+    // Retrieval is provided by the base class buffers
 }
 
 

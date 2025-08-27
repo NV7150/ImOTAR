@@ -377,4 +377,26 @@ public class PromptDAIterableProcessor : MonoBehaviour
         if (verboseLogging) Debug.Log($"{logPrefix} Complete: jobId={_completedJobId}");
         return true;
     }
+
+    /// <summary>
+    /// 現在のジョブを強制中断し、実行状態をクリアする（モデル・バッファ資源は保持）。
+    /// </summary>
+    public void AbortCurrent(bool clearOutputRT = false)
+    {
+        if (verboseLogging) Debug.Log($"{logPrefix} AbortCurrent: aborting job (running={_running})");
+        _iter = null;
+        _running = false;
+        _currentJobId = System.Guid.Empty;
+        _finalizedJobId = System.Guid.Empty;
+        _completedJobId = System.Guid.Empty;
+        _finalizeFrame = -1;
+
+        if (clearOutputRT && outputRT != null)
+        {
+            var active = RenderTexture.active;
+            RenderTexture.active = outputRT;
+            GL.Clear(false, true, new Color(-1f, -1f, -1f, 1f));
+            RenderTexture.active = active;
+        }
+    }
 }
