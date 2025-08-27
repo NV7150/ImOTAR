@@ -9,6 +9,7 @@ public class RotationCorrector : AsyncFrameProvider {
     [Header("Inputs")]
     [SerializeField] private MotionObtain motionSource;
     [SerializeField] private AsyncFrameProvider sourceProvider; // Completed source provider
+    [SerializeField] private Scheduler scheduler;              // For update requests
 
     [Header("Output (this FrameProvider)")]
     [SerializeField] private RenderTexture rotatedMask;
@@ -36,6 +37,11 @@ public class RotationCorrector : AsyncFrameProvider {
     private bool _hasSnapshot;
     private bool _warnedNoSnapshot;
 
+    [Header("Update Request")]
+    [SerializeField] private float updateRequestThresholdDeg = 3f;
+    private System.Guid _lastCompletedJobId = System.Guid.Empty;
+    private System.Collections.Generic.HashSet<System.Guid> _requestedUpdateIds = new System.Collections.Generic.HashSet<System.Guid>();
+
     [Header("Debug")]
     [SerializeField] private bool verboseLogging = true;
     [SerializeField] private string logPrefix = "[RotationCorrector]";
@@ -52,6 +58,7 @@ public class RotationCorrector : AsyncFrameProvider {
         if (sourceProvider == null) throw new System.NullReferenceException("RotationCorrector: sourceProvider not assigned");
         if (imuRotationMaterial == null) throw new System.NullReferenceException("RotationCorrector: imuRotationMaterial not assigned");
         if (rotatedMask == null) throw new System.NullReferenceException("RotationCorrector: rotatedMask not assigned");
+        if (scheduler == null) throw new System.NullReferenceException("RotationCorrector: scheduler not assigned");
 
         // Subscribe to source async events
         sourceProvider.OnAsyncFrameStarted += OnSourceJobStarted;
@@ -178,6 +185,16 @@ public class RotationCorrector : AsyncFrameProvider {
         imuRotationMaterial.SetTexture("_MainTex", src);
         Graphics.Blit(src, rotatedMask, imuRotationMaterial, 0);
         if (verboseLogging) Debug.Log($"{logPrefix} Blit done: src=({src.width}x{src.height}) -> dst=({rotatedMask.width}x{rotatedMask.height})");
+
+        // Threshold-based update request via Scheduler
+        if (scheduler != null && _lastCompletedJobId != System.Guid.Empty) {
+            float corr = ComputeCorrectionMagnitudeDegrees(r);
+            if (corr >= updateRequestThresholdDeg && !_requestedUpdateIds.Contains(_lastCompletedJobId)){
+                scheduler.RequestUpdate(_lastCompletedJobId);
+                _requestedUpdateIds.Add(_lastCompletedJobId);
+                if (verboseLogging) Debug.Log($"{logPrefix} RequestUpdate: id={_lastCompletedJobId}, corr={corr:F2} deg");
+            }
+        }
     }
 
     private void LateUpdate(){
@@ -218,6 +235,7 @@ public class RotationCorrector : AsyncFrameProvider {
         _hasSnapshot = true;
         _warnedNoSnapshot = false;
         _sourcePoseAtStart = poseAtStart;
+        _lastCompletedJobId = frame.Id;
         if (verboseLogging) Debug.Log($"{logPrefix} JobCompleted: id={frame.Id}, snap=({_capturedSource.width}x{_capturedSource.height}) captured");
         _startPoseByJobId.Remove(frame.Id);
         OnFirstOutputInit();
@@ -250,6 +268,21 @@ public class RotationCorrector : AsyncFrameProvider {
         };
         _capturedSource.Create();
         if (verboseLogging) Debug.Log($"{logPrefix} Alloc snapshot RT: {desc.width}x{desc.height} {desc.graphicsFormat}");
+    }
+
+    private float ComputeCorrectionMagnitudeDegrees(Quaternion rel){
+        Vector3 e = rel.eulerAngles;
+        float m = 0f;
+        if (usePitch) m = Mathf.Max(m, Mathf.Abs(NormalizeDegrees(e.x)));
+        if (useYaw)   m = Mathf.Max(m, Mathf.Abs(NormalizeDegrees(e.y)));
+        if (useRoll)  m = Mathf.Max(m, Mathf.Abs(NormalizeDegrees(e.z)));
+        return m;
+    }
+
+    private static float NormalizeDegrees(float deg){
+        // map [0,360) to [-180,180)
+        deg = Mathf.Repeat(deg + 180f, 360f) - 180f;
+        return deg;
     }
 }
 

@@ -7,25 +7,24 @@ using UnityEngine;
 /// </summary>
 public class ScheduledPromptDAEstimator : AsyncFrameProvider {
     [Header("Input Sources")]
-    [SerializeField] private FrameProvider cameraRec;     // RGB
-    [SerializeField] private FrameProvider depthRec;      // Depth(meters)
+    [SerializeField] private FrameProvider cameraRec;
+    [SerializeField] private FrameProvider depthRec;
     [SerializeField] private PromptDAIterableProcessor processor;
-    [SerializeField] private SchedulerBase scheduler;
+    [SerializeField] private Scheduler scheduler;
 
     [Header("Sync Settings")]
     [SerializeField] private float maxTimeSyncDifferenceMs = 100f;
 
     [Header("Scheduling/Steps")]
-    [Tooltip("LOW_SPEED 時に 1 フレームあたり回すステップ数")]
-    [SerializeField] private int stepsPerFrameLow = 4;
-    [Tooltip("HIGH→STOP 遷移時の1回限りのステップ数（将来強化用の余地）")]
-    [SerializeField] private int oneShotStepsOnStop = 4;
+    [SerializeField] private int stepsPerFrame = 4;
+
+    [Header("Output Policy")]
+    [SerializeField] private float highSpeedFillValue = -1f;
 
     [Header("Debug")]
     [SerializeField] private bool verboseLogging = true;
     [SerializeField] private string logPrefix = "[SchedPromptDA]";
 
-    // 入力同期
     private struct FrameData {
         public DateTime timestamp;
         public RenderTexture rgbFrame;
@@ -38,15 +37,10 @@ public class ScheduledPromptDAEstimator : AsyncFrameProvider {
     private FrameData _latestRgb;
     private FrameData _latestDepth;
 
-    // ペンディング（進行中に来た最新1本）
-    private bool _hasPending = false;
-    private FrameData _pending;
-
-    // FrameProviderメタ
+    // FrameProvider meta
     private DateTime _lastUpdateTime;
-    private System.Guid _currentJobId = System.Guid.Empty;
     private ScheduleStatus _prevState = ScheduleStatus.STOP;
-    private bool _runOnceAfterHighToStop = false;
+    private Guid _lastProcessedCompletedId = Guid.Empty;
     public override RenderTexture FrameTex => processor != null ? processor.ResultRT : null;
     public override DateTime TimeStamp => _lastUpdateTime;
 
@@ -57,7 +51,8 @@ public class ScheduledPromptDAEstimator : AsyncFrameProvider {
             IsInitTexture = true;
             OnFrameTexInitialized();
         }
-        if (verboseLogging) Debug.Log($"{logPrefix} Start: stepsPerFrameLow={stepsPerFrameLow}");
+        if (verboseLogging) 
+            Debug.Log($"{logPrefix} Start: stepsPerFrameLow={stepsPerFrame}");
     }
 
     private void OnEnable(){
@@ -105,17 +100,25 @@ public class ScheduledPromptDAEstimator : AsyncFrameProvider {
 
     private void TryKickOrPend(){
         ValidateSerializedFieldsOrThrow();
-        if (!_latestRgb.isValid || !_latestDepth.isValid) return;
+        if (!_latestRgb.isValid || !_latestDepth.isValid)
+            return;
 
-        // LOW_SPEED のみ Begin を許可（STOP/HIGH_SPEED は開始しない）
         var state = scheduler.CurrentState;
-        if (state != ScheduleStatus.LOW_SPEED) return;
+        // Allow Begin in LOW_SPEED, or in STOP only when request targets the current job ID and it is not running
+        bool allowBegin = (state == ScheduleStatus.LOW_SPEED) ||
+                          (state == ScheduleStatus.STOP &&
+                           scheduler.UpdateReqId != Guid.Empty &&
+                           !processor.IsRunning &&
+                           processor.CurrentJobId == scheduler.UpdateReqId);
+        if (!allowBegin)
+            return;
 
-        // 入力同期（PromptDAIterableEstimator と同等の閾値）
         var dtMs = Mathf.Abs((float)(_latestRgb.rgbTimestamp - _latestDepth.depthTimestamp).TotalMilliseconds);
-        if (dtMs > maxTimeSyncDifferenceMs) return;
-        if (!processor.IsInitialized || processor.ResultRT == null) return;
-
+        if (dtMs > maxTimeSyncDifferenceMs) 
+            return;
+        if (!processor.IsInitialized || processor.ResultRT == null) 
+            return;
+        
         var frame = new FrameData {
             timestamp      = (_latestRgb.rgbTimestamp > _latestDepth.depthTimestamp) ? _latestRgb.rgbTimestamp : _latestDepth.depthTimestamp,
             rgbFrame       = _latestRgb.rgbFrame,
@@ -125,85 +128,45 @@ public class ScheduledPromptDAEstimator : AsyncFrameProvider {
             isValid        = true
         };
 
-        bool isRunningLike = (processor.FinalizedJobId == System.Guid.Empty) && (processor.CurrentJobId != System.Guid.Empty);
-        if (isRunningLike) {
-            _pending = frame;
-            _hasPending = true;
-        } else {
-            if (processor.Begin(frame.rgbFrame, frame.depthFrame, frame.timestamp)) {
-                _hasPending = false;
-                _currentJobId = ProcessStart();
-                processor.SetJobId(_currentJobId);
-                if (verboseLogging) Debug.Log($"{logPrefix} Begin OK: jobId={_currentJobId}, ts={frame.timestamp:HH:mm:ss.fff}");
-            } else {
-                _pending = frame;
-                _hasPending = true;
-            }
-        }
+        if (processor.Begin(frame.rgbFrame, frame.depthFrame, frame.timestamp)) {
+            var jobId = ProcessStart();
+            processor.SetJobId(jobId);
 
+            if (verboseLogging) 
+                Debug.Log($"{logPrefix} Begin OK: jobId={jobId}, ts={frame.timestamp:HH:mm:ss.fff}");
+        } else {
+            if (verboseLogging)
+                Debug.LogWarning($"{logPrefix} Begin rejected by processor (already running or invalid)");
+        }
+        
         _latestRgb.isValid = false;
         _latestDepth.isValid = false;
     }
 
     private void Update(){
         ValidateSerializedFieldsOrThrow();
-        if (!processor.IsInitialized) return;
+        if (!processor.IsInitialized)
+            return;
 
         var state = scheduler.CurrentState;
-        if (_prevState == ScheduleStatus.HIGH_SPEED && state == ScheduleStatus.STOP){
-            _runOnceAfterHighToStop = true;
+        // On enter HIGH_SPEED: immediately set output to a constant and invalidate current job by JobID
+        if (_prevState != ScheduleStatus.HIGH_SPEED && state == ScheduleStatus.HIGH_SPEED){
+            FillOutput(highSpeedFillValue);
+            if (processor.CurrentJobId != Guid.Empty)
+                processor.InvalidateJob(processor.CurrentJobId);
         }
-        switch (state){
-            case ScheduleStatus.HIGH_SPEED:
-                // 実行中ジョブを進めない（実質破棄）。出力は-1で塗る。
-                if (processor.CurrentJobId != System.Guid.Empty || processor.FinalizedJobId != System.Guid.Empty)
-                {
-                    processor.AbortCurrent(clearOutputRT: false);
-                    _currentJobId = System.Guid.Empty;
-                    _hasPending = false; // 保留も破棄
-                }
-                FillOutputWithMinusOne();
-                break;
+        StepProcessor(stepsPerFrame);
 
-            case ScheduleStatus.LOW_SPEED:
-                StepProcessor(stepsPerFrameLow);
-                break;
-
-            case ScheduleStatus.STOP:
-                // 以前のマスクを維持。挙動は HIGH_SPEED と同様に新規開始・実行を停止し、
-                // HIGH→STOP 遷移直後のみ 1 回だけ前進してから中断する。
-                if (_runOnceAfterHighToStop && processor.CurrentJobId != System.Guid.Empty){
-                    StepProcessor(Mathf.Max(1, oneShotStepsOnStop));
-                    _runOnceAfterHighToStop = false;
-                }
-                if (processor.CurrentJobId != System.Guid.Empty || processor.FinalizedJobId != System.Guid.Empty){
-                    processor.AbortCurrent(clearOutputRT: false);
-                    _currentJobId = System.Guid.Empty;
-                }
-                _hasPending = false;
-                break;
-        }
-
-        // finalize→complete 昇格と適用
-        processor.TryPromoteCompleted();
-        bool isCompleteLike = (processor.CompletedJobId != System.Guid.Empty);
-        if (isCompleteLike) {
-            if (processor.ResultRT != null){
-                _lastUpdateTime = DateTime.UtcNow;
-                if (_currentJobId != System.Guid.Empty){
-                    if (verboseLogging) Debug.Log($"{logPrefix} Complete: calling ProcessEnd for jobId={_currentJobId}");
-                    ProcessEnd(_currentJobId);
-                    _currentJobId = System.Guid.Empty;
-                }
-            }
-
-            // ペンディングがあり、かつ LOW_SPEED のときのみ次ジョブへ
-            if (_hasPending && scheduler.CurrentState == ScheduleStatus.LOW_SPEED){
-                if (processor.Begin(_pending.rgbFrame, _pending.depthFrame, _pending.timestamp)){
-                    _currentJobId = ProcessStart();
-                    processor.SetJobId(_currentJobId);
-                    if (verboseLogging) Debug.Log($"{logPrefix} Begin (pending): jobId={_currentJobId}");
-                    _hasPending = false;
+        bool promotedNow = processor.TryPromoteCompleted();
+        if (promotedNow) {
+            var completedId = processor.CompletedJobId;
+            if (completedId != Guid.Empty && completedId != _lastProcessedCompletedId) {
+                if (processor.ResultRT != null){
+                    _lastUpdateTime = DateTime.UtcNow;
+                    if (verboseLogging)
+                        Debug.Log($"{logPrefix} Complete: calling ProcessEnd for jobId={completedId}");
+                    ProcessEnd(completedId);
+                    _lastProcessedCompletedId = completedId;
                 }
             }
         }
@@ -211,14 +174,18 @@ public class ScheduledPromptDAEstimator : AsyncFrameProvider {
     }
 
     private void ValidateSerializedFieldsOrThrow(){
-        if (cameraRec == null) throw new NullReferenceException("ScheduledPromptDAEstimator: cameraRec is not assigned");
-        if (depthRec == null) throw new NullReferenceException("ScheduledPromptDAEstimator: depthRec is not assigned");
-        if (processor == null) throw new NullReferenceException("ScheduledPromptDAEstimator: processor is not assigned");
-        if (scheduler == null) throw new NullReferenceException("ScheduledPromptDAEstimator: scheduler is not assigned");
+        if (cameraRec == null) 
+            throw new NullReferenceException("ScheduledPromptDAEstimator: cameraRec is not assigned");
+        if (depthRec == null) 
+            throw new NullReferenceException("ScheduledPromptDAEstimator: depthRec is not assigned");
+        if (processor == null)
+            throw new NullReferenceException("ScheduledPromptDAEstimator: processor is not assigned");
+        if (scheduler == null)
+            throw new NullReferenceException("ScheduledPromptDAEstimator: scheduler is not assigned");
     }
 
     private void StepProcessor(int steps){
-        bool isRunning = (processor.CurrentJobId != System.Guid.Empty);
+        bool isRunning = processor != null && processor.IsRunning;
         if (isRunning){
             int n = Mathf.Max(1, steps);
             processor.Step(n);
@@ -226,12 +193,13 @@ public class ScheduledPromptDAEstimator : AsyncFrameProvider {
         }
     }
 
-    private void FillOutputWithMinusOne(){
+    private void FillOutput(float value){
         var rt = processor != null ? processor.ResultRT : null;
-        if (rt == null) return;
+        if (rt == null)
+            return;
         var active = RenderTexture.active;
         RenderTexture.active = rt;
-        GL.Clear(false, true, new Color(-1f, -1f, -1f, 1f));
+        GL.Clear(false, true, new Color(value, value, value, 1f));
         RenderTexture.active = active;
     }
 }

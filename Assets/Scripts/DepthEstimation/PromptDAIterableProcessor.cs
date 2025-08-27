@@ -3,17 +3,17 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
 using Unity.Sentis;
+using System.Collections.Generic;
 
 /// <summary>
-/// Sentis 2.1.x: Worker.ScheduleIterable を正しく使った分割実行ラッパ
-/// - Begin: レタボ/ToTensor を CB で1回実行 → worker.ScheduleIterable(feeds)
-/// - Step(n): n 回 MoveNext()（CBは不要）
-/// - 完了時のみ CB を新規に作って RenderToTexture→ROI→Fence(CPUSynchronisation) を実行
+/// Sentis 2.1.x: Wrapper for iterative inference via Worker.ScheduleIterable.
+/// - Begin: preprocess (letterbox + ToTensor) once via CommandBuffer → ScheduleIterable(feeds)
+/// - Step(n): call MoveNext() n times (no external CommandBuffer needed)
+/// - On finalization: write model output to textures (RenderToTexture → ROI copy)
 /// </summary>
-public class PromptDAIterableProcessor : MonoBehaviour
-{
+public class PromptDAIterableProcessor : MonoBehaviour {
     [Header("Output")]
-    [SerializeField] private RenderTexture outputRT;          // 最終出力先（RFloat, newW x newH）
+    [SerializeField] private RenderTexture outputRT;          // Final output (RFloat, newW x newH)
     [Header("Model Configuration")]
     [SerializeField] private ModelAsset promptDaOnnx;
 
@@ -25,59 +25,60 @@ public class PromptDAIterableProcessor : MonoBehaviour
     [SerializeField] private BackendType backendType = BackendType.GPUCompute;
     
     [Header("Completion")]
-    [SerializeField, Min(0)] private int completionFrameDelay = 1; // N フレーム遅延で完了判定
+    [SerializeField, Min(0)] private int completionFrameDelay = 1; // Completion promotion delay (frames)
 
     [Header("Debug")]
     [SerializeField] private bool verboseLogging = true;
     [SerializeField] private string logPrefix = "[PromptDA-ITER]";
 
-    // 定数
+    // Constants
     private const int LETTERBOX_MULTIPLE = 14;
     private const int RGB_CHANNELS = 3;
     private const int DEPTH_CHANNELS = 1;
 
-    // ランタイム
+    // Runtime
     private Model  _runtimeModel;
     private Worker _worker;
 
-    // 入出力GPU資源
+    // GPU resources
     private RenderTexture _resizeRGB, _canvasRGB;     // ARGB32
     private RenderTexture _resizeDepth, _canvasDepth; // RFloat
     private Tensor<float> _imgTensorGPU;              // [1,3,H,W]
     private Tensor<float> _promptTensorGPU;           // [1,1,H,W]
     private RenderTexture _fullOutputRT;              // dstW x dstH, RFloat
 
-    // レタボ計算キャッシュ
+    // Letterbox cache
     private int _dstW, _dstH, _newW, _newH, _padX, _padY;
     private bool _letterboxParamsValid = false;
 
-    // 入力名とインデックス
+    // Model input names and indices
     private string _imageInputName = "image";
     private string _promptInputName = "prompt_depth";
     private int _imageInputIndex = 0;
     private int _promptInputIndex = 1;
 
-    // 実行ステート
-    private IEnumerator _iter;          // Worker.ScheduleIterable の IEnumerator
-    private bool _running = false;      // MoveNext を残している
-    // 世代（ジョブ）管理
-    private System.Guid _currentJobId = System.Guid.Empty;
-    private System.Guid _finalizedJobId = System.Guid.Empty;
-    private System.Guid _completedJobId = System.Guid.Empty;
+    // Execution state
+    private IEnumerator _iter;          // IEnumerator returned by ScheduleIterable
+    private bool _running = false;
+    // Job tracking
+    private Guid _currentJobId = Guid.Empty;
+    private Guid _finalizedJobId = Guid.Empty;
+    private Guid _completedJobId = Guid.Empty;
     private int _finalizeFrame = -1;    // Finalize を発行したフレーム番号（finalizedJobId用）
     private bool _supportsAsyncCompute;
+    private HashSet<Guid> _invalidJobIds = new HashSet<Guid>();
 
-    // メタ
+    // Meta
     public bool IsInitialized { get; private set; }
     // 公開するのは世代IDのみ（boolではなく世代の状態で判定させる）
-    public System.Guid CurrentJobId   => _currentJobId;
-    public System.Guid FinalizedJobId => _finalizedJobId;
-    public System.Guid CompletedJobId => _completedJobId;
+    public Guid CurrentJobId   => _currentJobId;
+    public Guid FinalizedJobId => _finalizedJobId;
+    public Guid CompletedJobId => _completedJobId;
     public DateTime CurrentTimestamp { get; private set; }
     public RenderTexture ResultRT => outputRT;
+    public bool IsRunning => _running;
 
-    void Awake()
-    {
+    void Awake() {
         _supportsAsyncCompute = SystemInfo.supportsAsyncCompute;
         InitializeModelAndWorker();
 
@@ -85,40 +86,38 @@ public class PromptDAIterableProcessor : MonoBehaviour
             Debug.Log($"{logPrefix} Awake: backend={backendType}, async={_supportsAsyncCompute}, platform={Application.platform}");
     }
 
-    void OnDestroy()
-    {
-        if (verboseLogging) Debug.Log($"{logPrefix} OnDestroy: releasing resources");
+    void OnDestroy() {
+        if (verboseLogging)
+            Debug.Log($"{logPrefix} OnDestroy: releasing resources");
 
         _iter = null;
         _worker?.Dispose();   _worker = null;
 
-        ReleaseRT(ref _resizeRGB);   ReleaseRT(ref _canvasRGB);
-        ReleaseRT(ref _resizeDepth); ReleaseRT(ref _canvasDepth);
+        ReleaseRT(ref _resizeRGB);   
+        ReleaseRT(ref _canvasRGB);
+        ReleaseRT(ref _resizeDepth); 
+        ReleaseRT(ref _canvasDepth);
         ReleaseRT(ref _fullOutputRT);
 
         _imgTensorGPU?.Dispose();    _imgTensorGPU = null;
         _promptTensorGPU?.Dispose(); _promptTensorGPU = null;
     }
 
-    // ---- Public API -------------------------------------------------------
-
-    /// <summary> 推論の新規開始（前処理＋イテレータ初期化）。実行はまだ開始しない。 </summary>
-    public bool Begin(RenderTexture rgbInput, RenderTexture depthInput, DateTime timestamp)
-    {
-        if (!IsInitialized || rgbInput == null || depthInput == null)
-        {
-            if (verboseLogging) Debug.LogWarning($"{logPrefix} Begin: invalid (IsInit={IsInitialized}, rgbNull={rgbInput==null}, depNull={depthInput==null})");
+    /// <summary> Start a new inference (preprocess + initialize iterator). Does not fully execute yet. </summary>
+    public bool Begin(RenderTexture rgbInput, RenderTexture depthInput, DateTime timestamp) {
+        if (!IsInitialized || rgbInput == null || depthInput == null) {
+            if (verboseLogging)
+                Debug.LogWarning($"{logPrefix} Begin: invalid (IsInit={IsInitialized}, rgbNull={rgbInput==null}, depNull={depthInput==null})");
             return false;
         }
-        if (_running)
-        {
-            if (verboseLogging) Debug.LogWarning($"{logPrefix} Begin: rejected (already running)");
+        if (_running) {
+            if (verboseLogging)
+                Debug.LogWarning($"{logPrefix} Begin: rejected (already running)");
             return false; // 単一ジョブ前提
         }
 
-        // 初回のみレタボと資源確保
-        if (!_letterboxParamsValid)
-        {
+        // Allocate resources and compute letterbox parameters on first run
+        if (!_letterboxParamsValid) {
             ComputeLetterboxParams(rgbInput.width, rgbInput.height,
                                    onnxWidth, onnxHeight, LETTERBOX_MULTIPLE,
                                    out _newW, out _newH, out _padX, out _padY);
@@ -127,17 +126,15 @@ public class PromptDAIterableProcessor : MonoBehaviour
             EnsureResources();
             ResolveInputIndices();
 
-            if (verboseLogging)
-            {
+            if (verboseLogging) {
                 Debug.Log($"{logPrefix} Letterbox: src=({rgbInput.width}x{rgbInput.height}), dst=({_dstW}x{_dstH}), new=({_newW}x{_newH}), pad=({_padX},{_padY})");
                 Debug.Log($"{logPrefix} RTs: canvasRGB={_canvasRGB.descriptor}, canvasDepth={_canvasDepth.descriptor}, out={(outputRT!=null ? outputRT.descriptor.ToString() : "null")}");
                 Debug.Log($"{logPrefix} Inputs: imageIdx={_imageInputIndex}({_imageInputName}), promptIdx={_promptInputIndex}({_promptInputName})");
             }
         }
 
-        // ---- 前処理（レタボ整形＋ToTensor）: CB で 1 回だけ実行 ----
-        using (var cb = new CommandBuffer { name = "PromptDA Iterable Preprocess" })
-        {
+        // Preprocess (letterbox + ToTensor) once via CommandBuffer
+        using (var cb = new CommandBuffer { name = "PromptDA Iterable Preprocess" }) {
             // RGB
             cb.Blit(rgbInput, _resizeRGB);
             cb.CopyTexture(_resizeRGB,  0,0, 0,0, _newW,_newH, _canvasRGB,  0,0, _padX,_padY);
@@ -152,7 +149,7 @@ public class PromptDAIterableProcessor : MonoBehaviour
             Graphics.ExecuteCommandBuffer(cb);
         }
 
-        // ---- イテレータ初期化：必ず worker.ScheduleIterable を使用 ----
+        // Initialize iterator via worker.ScheduleIterable
         var feeds = new Tensor[2];
         feeds[_imageInputIndex]  = _imgTensorGPU;
         feeds[_promptInputIndex] = _promptTensorGPU;
@@ -166,98 +163,60 @@ public class PromptDAIterableProcessor : MonoBehaviour
         return true;
     }
 
-    /// <summary> イテレータを steps 回だけ前進。CB は不要（内部でスケジュールされる）。 </summary>
-    public void Step(int steps)
-    {
-        if (!_running || _iter == null || steps <= 0)
-        {
-            // if (verboseLogging && steps > 0)
-            //     Debug.Log($"{logPrefix} Step: skipped (running={_running}, iterNull={_iter==null}, steps={steps})");
+    /// <summary> Advance the iterator by the specified number of steps. </summary>
+    public void Step(int steps) {
+        if (!_running || _iter == null || steps <= 0) {
             return;
         }
 
         int advanced = 0;
-        for (int k = 0; k < steps; k++)
-        {
+        for (int k = 0; k < steps; k++) {
             bool hasMore = false;
-            try { hasMore = _iter.MoveNext(); }
-            catch (Exception e)
-            {
+            try { 
+                hasMore = _iter.MoveNext(); 
+            } catch (Exception e) {
                 Debug.LogError($"{logPrefix} Step MoveNext exception: {e}");
                 hasMore = false;
             }
             advanced++;
 
-            if (!hasMore)
-            {
-                // ---- 全レイヤのスケジューリングが終わった。出力をRTへ書き出し ----
+            if (!hasMore) {
+                // All layers scheduled; finalize and write outputs
                 var outRef = _worker.PeekOutput() as Tensor<float>;
-                using (var cb = new CommandBuffer { name = "PromptDA Iterable Finalize" })
-                {
-                    // Clear destination to a known value (-1) to avoid stale pixels outside copy rect
-                    if (outputRT != null)
-                    {
-                        cb.SetRenderTarget(outputRT);
-                        cb.ClearRenderTarget(false, true, new Color(-1f, -1f, -1f, 1f));
+                bool isInvalid = (_currentJobId != Guid.Empty) && _invalidJobIds.Contains(_currentJobId);
+                if (!isInvalid) {
+                    using (var cb = new CommandBuffer { name = "PromptDA Iterable Finalize" }) {
+                        cb.RenderToTexture(outRef, _fullOutputRT);
+                        if (outputRT != null) {
+                            cb.CopyTexture(_fullOutputRT, 0,0, _padX,_padY, _newW,_newH, outputRT, 0,0, 0,0);
+                        }
+                        Graphics.ExecuteCommandBuffer(cb);
                     }
-                    cb.RenderToTexture(outRef, _fullOutputRT);
-                    if (outputRT != null)
-                    {
-                        cb.CopyTexture(_fullOutputRT, 0,0, _padX,_padY, _newW,_newH, outputRT, 0,0, 0,0);
-                    }
-                    Graphics.ExecuteCommandBuffer(cb);
                 }
 
                 _running   = false;
                 _finalizedJobId = _currentJobId;
                 _finalizeFrame = Time.frameCount;
-                if (verboseLogging)
-                {
+                if (verboseLogging) {
                     var p = HasDelayElapsed();
-                    Debug.Log($"{logPrefix} Finalize: frame={Time.frameCount}, finalized={(_finalizedJobId!=System.Guid.Empty)}, passed={p}");
+                    Debug.Log($"{logPrefix} Finalize: frame={Time.frameCount}, finalized={(_finalizedJobId!=Guid.Empty)}, passed={p}, applied={!isInvalid}");
                 }
                 break;
             }
         }
 
-        // if(_finalFence.passed)
-        //     Debug.Log("passed");
-
-        if (verboseLogging && _finalizedJobId != System.Guid.Empty)
-        {
+        if (verboseLogging && _finalizedJobId != Guid.Empty) {
             var passed = HasDelayElapsed();
-            Debug.Log($"{logPrefix} Step: advanced={advanced}, running={_running}, finalized={(_finalizedJobId!=System.Guid.Empty)}, passed={passed})");
+            Debug.Log($"{logPrefix} Step: advanced={advanced}, running={_running}, finalized={(_finalizedJobId!=Guid.Empty)}, passed={passed})");
         }
-    }
-
-    /// <summary> 完了後に内部ステートを初期化（次ジョブ用） </summary>
-    public void ResetForNext()
-    {
-        if (_finalizedJobId == System.Guid.Empty || !HasDelayElapsed())
-        {
-            if (verboseLogging)
-                Debug.Log($"{logPrefix} ResetForNext: ignored (finalized={(_finalizedJobId!=System.Guid.Empty)}, passed={HasDelayElapsed()})");
-            return;
-        }
-
-        _iter = null;
-        _running = false;
-        _finalizedJobId = System.Guid.Empty;
-        _completedJobId = System.Guid.Empty;
-        _finalizeFrame = -1;
-
-        if (verboseLogging)
-            Debug.Log($"{logPrefix} ResetForNext: cleared (frame={Time.frameCount})");
     }
 
     // ---- Diagnostics -------------------------------------------------------
 
     // ---- 内部ヘルパ -------------------------------------------------------
 
-    private void InitializeModelAndWorker()
-    {
-        if (promptDaOnnx == null)
-        {
+    private void InitializeModelAndWorker() {
+        if (promptDaOnnx == null) {
             Debug.LogError($"{logPrefix} Model is not assigned!");
             return;
         }
@@ -265,37 +224,34 @@ public class PromptDAIterableProcessor : MonoBehaviour
         ResolveInputNamesFromModel(_runtimeModel);
         _worker = new Worker(_runtimeModel, backendType);
         IsInitialized = true;
-
         if (verboseLogging)
             Debug.Log($"{logPrefix} Model loaded. inputs={_runtimeModel.inputs.Count}, backend={backendType}");
     }
 
-    private void ResolveInputNamesFromModel(Model model)
-    {
-        foreach (var inp in model.inputs)
-        {
+    private void ResolveInputNamesFromModel(Model model) {
+        foreach (var inp in model.inputs) {
             var n = inp.name ?? string.Empty;
-            if (n.IndexOf("image",  StringComparison.OrdinalIgnoreCase) >= 0) _imageInputName  = n;
-            if (n.IndexOf("prompt", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                n.IndexOf("depth",  StringComparison.OrdinalIgnoreCase) >= 0) _promptInputName = n;
+            if (n.IndexOf("image",  StringComparison.OrdinalIgnoreCase) >= 0)
+                _imageInputName  = n;
+            if (n.IndexOf("prompt", StringComparison.OrdinalIgnoreCase) >= 0 || n.IndexOf("depth",  StringComparison.OrdinalIgnoreCase) >= 0)
+                _promptInputName = n;
         }
     }
 
-    private void ResolveInputIndices()
-    {
+    private void ResolveInputIndices() {
         var inputs = _runtimeModel.inputs;
-        for (int i = 0; i < inputs.Count; i++)
-        {
+        for (int i = 0; i < inputs.Count; i++) {
             var nm = inputs[i].name ?? string.Empty;
-            if (nm.IndexOf(_imageInputName,  StringComparison.OrdinalIgnoreCase) >= 0) _imageInputIndex  = i;
-            if (nm.IndexOf(_promptInputName, StringComparison.OrdinalIgnoreCase) >= 0) _promptInputIndex = i;
+            if (nm.IndexOf(_imageInputName,  StringComparison.OrdinalIgnoreCase) >= 0) 
+                _imageInputIndex  = i;
+            if (nm.IndexOf(_promptInputName, StringComparison.OrdinalIgnoreCase) >= 0)
+                _promptInputIndex = i;
         }
         if (verboseLogging)
             Debug.Log($"{logPrefix} ResolveInputIndices: imageIndex={_imageInputIndex}, promptIndex={_promptInputIndex}");
     }
 
-    private void EnsureResources()
-    {
+    private void EnsureResources() {
         ReleaseRT(ref _resizeRGB);   ReleaseRT(ref _canvasRGB);
         ReleaseRT(ref _resizeDepth); ReleaseRT(ref _canvasDepth);
         ReleaseRT(ref _fullOutputRT);
@@ -316,10 +272,8 @@ public class PromptDAIterableProcessor : MonoBehaviour
             Debug.Log($"{logPrefix} EnsureResources: allocated RT/Tensor (outRT={(outputRT!=null)})");
     }
 
-    private static RenderTexture AllocRT(int w, int h, RenderTextureFormat fmt, bool enableRW)
-    {
-        var rt = new RenderTexture(w, h, 0, fmt)
-        {
+    private static RenderTexture AllocRT(int w, int h, RenderTextureFormat fmt, bool enableRW) {
+        var rt = new RenderTexture(w, h, 0, fmt) {
             enableRandomWrite = enableRW,
             wrapMode = TextureWrapMode.Clamp,
             filterMode = FilterMode.Bilinear,
@@ -330,73 +284,63 @@ public class PromptDAIterableProcessor : MonoBehaviour
         return rt;
     }
 
-    private static void ReleaseRT(ref RenderTexture rt)
-    {
+    private static void ReleaseRT(ref RenderTexture rt) {
         if (rt == null) return;
-        if (rt.IsCreated()) rt.Release();           
+        if (rt.IsCreated()) rt.Release();
         UnityEngine.Object.Destroy(rt);
         rt = null;
     }
 
-    private static void ComputeLetterboxParams(int srcW, int srcH, int dstW, int dstH, int multiple,
-        out int newW, out int newH, out int padX, out int padY)
-    {
+    private static void ComputeLetterboxParams(int srcW, int srcH, int dstW, int dstH, int multiple, out int newW, out int newH, out int padX, out int padY) {
         float scale = Mathf.Min((float)dstW / srcW, (float)dstH / srcH);
         newW = Mathf.Max(multiple, Mathf.FloorToInt(srcW * scale));
         newH = Mathf.Max(multiple, Mathf.FloorToInt(srcH * scale));
         newW -= newW % multiple;
         newH -= newH % multiple;
         padX = (dstW - newW) / 2;
-        padY = (dstH -newH) / 2;
+        padY = (dstH - newH) / 2;
     }
 
-    // ---- Completion helper (N-frame delay) --------------------------------
-    private bool HasDelayElapsed()
-    {
-        if (_finalizedJobId == System.Guid.Empty || _finalizeFrame < 0) return false;
+    // Completion helper (N-frame delay)
+    private bool HasDelayElapsed() {
+        if (_finalizedJobId == Guid.Empty || _finalizeFrame < 0)
+            return false;
         int wait = Mathf.Max(0, completionFrameDelay);
         return (Time.frameCount - _finalizeFrame) >= wait;
     }
 
-    // ---- Job ID (Guid) API ------------------------------------------------
-    public void SetJobId(System.Guid jobId)
-    {
+    // Job ID (Guid) API
+    public void SetJobId(Guid jobId) {
         _currentJobId = jobId;
-        if (verboseLogging) Debug.Log($"{logPrefix} SetJobId: {_currentJobId}");
+        if (verboseLogging) 
+            Debug.Log($"{logPrefix} SetJobId: {_currentJobId}");
     }
 
     /// <summary>
-    /// Finalize済みのジョブを、遅延経過後にCompleteへ昇格（1回だけtrue）。
+    /// Promote a finalized job to completed after the configured delay (one-time true).
     /// </summary>
-    public bool TryPromoteCompleted()
-    {
-        if (_finalizedJobId == System.Guid.Empty) return false;
-        if (_completedJobId == _finalizedJobId) return false;
-        if (!HasDelayElapsed()) return false;
+    public bool TryPromoteCompleted() {
+        if (_finalizedJobId == Guid.Empty) 
+            return false;
+        if (_completedJobId == _finalizedJobId)
+            return false;
+        if (!HasDelayElapsed()) 
+            return false;
         _completedJobId = _finalizedJobId;
-        if (verboseLogging) Debug.Log($"{logPrefix} Complete: jobId={_completedJobId}");
+        _invalidJobIds.Remove(_completedJobId);
+        if (verboseLogging) 
+            Debug.Log($"{logPrefix} Complete: jobId={_completedJobId}");
         return true;
     }
 
     /// <summary>
-    /// 現在のジョブを強制中断し、実行状態をクリアする（モデル・バッファ資源は保持）。
+    /// Disable final apply (write to outputRT) for the specified JobID.
     /// </summary>
-    public void AbortCurrent(bool clearOutputRT = false)
-    {
-        if (verboseLogging) Debug.Log($"{logPrefix} AbortCurrent: aborting job (running={_running})");
-        _iter = null;
-        _running = false;
-        _currentJobId = System.Guid.Empty;
-        _finalizedJobId = System.Guid.Empty;
-        _completedJobId = System.Guid.Empty;
-        _finalizeFrame = -1;
-
-        if (clearOutputRT && outputRT != null)
-        {
-            var active = RenderTexture.active;
-            RenderTexture.active = outputRT;
-            GL.Clear(false, true, new Color(-1f, -1f, -1f, 1f));
-            RenderTexture.active = active;
-        }
+    public void InvalidateJob(Guid jobId) {
+        if (jobId == Guid.Empty) 
+            return;
+        _invalidJobIds.Add(jobId);
+        if (verboseLogging) 
+            Debug.Log($"{logPrefix} InvalidateJob: {jobId}");
     }
 }

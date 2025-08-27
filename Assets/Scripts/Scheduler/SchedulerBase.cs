@@ -1,11 +1,10 @@
-using UnityEngine;
+using System;
 
-public enum ScheduleStatus{
-    HIGH_SPEED,
-    LOW_SPEED,
-    STOP
-}
+public abstract class SchedulerBase: Scheduler {
+    private Guid _updateReqId = Guid.Empty;
+    public override Guid UpdateReqId => _updateReqId;
 
-public abstract class SchedulerBase : MonoBehaviour {
-    public abstract ScheduleStatus CurrentState { get; }
+    public override void RequestUpdate(Guid id) {
+        _updateReqId = id;
+    }
 }

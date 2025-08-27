@@ -773,8 +773,8 @@ MonoBehaviour:
   processor: {fileID: 758036906}
   scheduler: {fileID: 614587372}
   maxTimeSyncDifferenceMs: 500
-  stepsPerFrameLow: 25
-  oneShotStepsOnStop: 50
+  stepsPerFrame: 25
+  highSpeedFillValue: -1
   verboseLogging: 1
   logPrefix: '[SchedPromptDA]'
 --- !u!1 &758036905
@@ -2070,13 +2070,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   motionSource: {fileID: 1927989998}
-  sourceProvider: {fileID: 1952679625}
+  sourceProvider: {fileID: 730045953}
+  scheduler: {fileID: 614587372}
   rotatedMask: {fileID: 8400000, guid: 5f0cf0a0c21424e18bad1893ef5d22e5, type: 2}
   imuRotationMaterial: {fileID: 2100000, guid: 73b404b9d80fe4c5896f86d1dbcae0da, type: 2}
   useYaw: 1
   usePitch: 1
   useRoll: 1
   _arCameraManager: {fileID: 1461364221}
+  updateRequestThresholdDeg: 10
   verboseLogging: 0
   logPrefix: '[RotationCorrector]'
 --- !u!114 &1927989998
@@ -2437,7 +2439,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   refAngularSpeed: {x: 6, y: 6, z: 6}
-  deadzone: 0.05
+  deadzone: 0.005
 --- !u!4 &2041101827
 Transform:
   m_ObjectHideFlags: 0
