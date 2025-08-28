@@ -46,6 +46,11 @@ public class RotationCorrector : AsyncFrameProvider {
     [SerializeField] private bool verboseLogging = true;
     [SerializeField] private string logPrefix = "[RotationCorrector]";
 
+    [Header("Diagnostics")]
+    [SerializeField] private bool logScaleDiagnostics = false;
+    [SerializeField] private int logEveryNFrames = 30;
+    private int _logFrameCounter = 0;
+
     public override RenderTexture FrameTex => rotatedMask;
     public override System.DateTime TimeStamp => _timestamp;
 
@@ -171,13 +176,21 @@ public class RotationCorrector : AsyncFrameProvider {
         if (verboseLogging) Debug.Log($"{logPrefix} Process: relEuler pitch={eul.x:F3}, yaw={eul.y:F3}, roll={eul.z:F3}");
 
         imuRotationMaterial.SetMatrix("_R", R);
-        // RTサイズに合わせて正規化補正（intrinsicsはカメラ解像度基準なのでRTに合わせてスケール）
+        // intrinsics はUV正規化済みなのでそのまま使用する
         int w = src.width;
         int h = src.height;
-        float fxRt = _fxN * ((_intrinsicWidth > 0 && w > 0) ? ((float)_intrinsicWidth / w) : 1f);
-        float fyRt = _fyN * ((_intrinsicHeight > 0 && h > 0) ? ((float)_intrinsicHeight / h) : 1f);
-        float cxRt = _cxN * ((_intrinsicWidth > 0 && w > 0) ? ((float)_intrinsicWidth / w) : 1f);
-        float cyRt = _cyN * ((_intrinsicHeight > 0 && h > 0) ? ((float)_intrinsicHeight / h) : 1f);
+        float fxRt = _fxN;
+        float fyRt = _fyN;
+        float cxRt = _cxN;
+        float cyRt = _cyN;
+
+        if (logScaleDiagnostics){
+            _logFrameCounter++;
+            int mod = Mathf.Max(1, logEveryNFrames);
+            if ((_logFrameCounter % mod) == 0){
+                Debug.Log($"{logPrefix} ScaleDiag: src=({w}x{h}), dst=({rotatedMask.width}x{rotatedMask.height}), intrRes=({_intrinsicWidth}x{_intrinsicHeight}), fxN={_fxN:F6}, fyN={_fyN:F6}, cxN={_cxN:F6}, cyN={_cyN:F6}, fxRt={fxRt:F6}, fyRt={fyRt:F6}, cxRt={cxRt:F6}, cyRt={cyRt:F6}");
+            }
+        }
         imuRotationMaterial.SetFloat("_Fx", fxRt);
         imuRotationMaterial.SetFloat("_Fy", fyRt);
         imuRotationMaterial.SetFloat("_Cx", cxRt);

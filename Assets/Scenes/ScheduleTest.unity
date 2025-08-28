@@ -585,7 +585,7 @@ MonoBehaviour:
   - 1
   stopThreshold: 0.01
   highSpeedThreshold: 0.5
-  verboseLogs: 1
+  verboseLogs: 0
 --- !u!4 &614587373
 Transform:
   m_ObjectHideFlags: 0
@@ -2081,6 +2081,8 @@ MonoBehaviour:
   updateRequestThresholdDeg: 10
   verboseLogging: 0
   logPrefix: '[RotationCorrector]'
+  logScaleDiagnostics: 1
+  logEveryNFrames: 30
 --- !u!114 &1927989998
 MonoBehaviour:
   m_ObjectHideFlags: 0
