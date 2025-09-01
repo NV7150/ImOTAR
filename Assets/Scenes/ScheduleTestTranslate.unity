@@ -1945,7 +1945,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1927989996}
   - component: {fileID: 1927989998}
-  - component: {fileID: 1927989997}
+  - component: {fileID: 1927989999}
   m_Layer: 0
   m_Name: Corrector
   m_TagString: Untagged
@@ -1968,32 +1968,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1927989997
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1927989994}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ad184606e9d0c43309898d4763cd901c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  motionSource: {fileID: 1927989998}
-  sourceProvider: {fileID: 730045953}
-  scheduler: {fileID: 614587372}
-  rotatedMask: {fileID: 8400000, guid: 5f0cf0a0c21424e18bad1893ef5d22e5, type: 2}
-  imuRotationMaterial: {fileID: 2100000, guid: 73b404b9d80fe4c5896f86d1dbcae0da, type: 2}
-  useYaw: 1
-  usePitch: 1
-  useRoll: 1
-  _arCameraManager: {fileID: 1461364221}
-  updateRequestThresholdDeg: 10
-  verboseLogging: 0
-  logPrefix: '[RotationCorrector]'
-  logScaleDiagnostics: 1
-  logEveryNFrames: 30
 --- !u!114 &1927989998
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2008,6 +1982,32 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   historyCapacityPerType: 256
   cameraTransform: {fileID: 1461364217}
+--- !u!114 &1927989999
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1927989994}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 771f704400e904916a9cfdcb64cd139d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  motionSource: {fileID: 1927989998}
+  sourceProvider: {fileID: 730045953}
+  scheduler: {fileID: 614587372}
+  lowResDepthMeters: {fileID: 8400000, guid: d5dae7e4603d4450d93aeb424dc4c4d0, type: 2}
+  transformedMask: {fileID: 8400000, guid: 5f0cf0a0c21424e18bad1893ef5d22e5, type: 2}
+  se3BackwarpMaterial: {fileID: 2100000, guid: 2bf6bb2b06d314bb684256cf9424ec2f, type: 2}
+  _arCameraManager: {fileID: 1461364221}
+  useYaw: 1
+  usePitch: 1
+  useRoll: 1
+  updateRequestRotationThresholdDeg: 10
+  updateRequestTranslationThresholdMeters: 0.05
+  verboseLogging: 1
+  logPrefix: '[TransformCorrector]'
 --- !u!1 &1951123224
 GameObject:
   m_ObjectHideFlags: 0

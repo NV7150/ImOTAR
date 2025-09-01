@@ -53,8 +53,11 @@ public class ARCamMotionObtain : MotionObtainBase {
         _lastFrameRotationDelta = Quaternion.Inverse(_prevRotation) * currRot;
         _lastFramePositionDelta = currPos - _prevPosition;
 
-        Record(new AbsoluteRotationData(System.DateTime.UtcNow, currRot));
-        Record(new RotationDeltaData(System.DateTime.UtcNow, _lastFrameRotationDelta));
+        var now = System.DateTime.UtcNow;
+        Record(new AbsoluteRotationData(now, currRot));
+        Record(new RotationDeltaData(now, _lastFrameRotationDelta));
+        Record(new AbsolutePositionData(now, currPos));
+        Record(new PositionDeltaData(now, _lastFramePositionDelta));
 
         _prevRotation = currRot;
         _prevPosition = currPos;
@@ -70,8 +73,6 @@ public class ARCamMotionObtain : MotionObtainBase {
         Record(new AbsoluteRotationData(System.DateTime.UtcNow, cameraTransform.rotation));
         Record(new RotationDeltaData(System.DateTime.UtcNow, Quaternion.identity));
     }
-
-    // Retrieval is provided by the base class buffers
 }
 
 

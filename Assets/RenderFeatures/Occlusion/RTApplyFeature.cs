@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.Experimental.Rendering;
+using UnityEngine.XR.ARFoundation;
 
 namespace RenderPass {
     public class RTApplyFeature : ScriptableRendererFeature{
@@ -59,6 +60,14 @@ namespace RenderPass {
             if (hasDepth)
             {
                 return;
+            }
+
+            // Fetch ARCameraBackground from current camera and pass it to the render pass
+            var currentCamera = renderingData.cameraData.camera;
+            var arBackground = currentCamera != null ? currentCamera.GetComponent<ARCameraBackground>() : null;
+            if (arBackground != null)
+            {
+                _mMaterialApplyPass.SetARBackground(arBackground);
             }
 
             renderer.EnqueuePass(_mMaterialApplyPass);
