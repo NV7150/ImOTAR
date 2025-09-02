@@ -80,6 +80,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_Active: 1
   settings:
-    applyMaterial: {fileID: 2100000, guid: 14b9e1fe043ec4e749df915dad7a421b, type: 2}
-    sourceRT: {fileID: 8400000, guid: 5f0cf0a0c21424e18bad1893ef5d22e5, type: 2}
+    applyMaterial: {fileID: 2100000, guid: d533df5a414ff43cc834088611ea2799, type: 2}
+    sourceRT: {fileID: 8400000, guid: 4093feb22a24d474f8c89aad7441ac8f, type: 2}
     runOnEditor: 0

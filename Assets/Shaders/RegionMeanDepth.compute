@@ -1,0 +1,193 @@
+#pragma kernel ResetBuffers
+#pragma kernel Pass1_CountMax
+#pragma kernel Pass2_ComputeScale
+#pragma kernel Pass3_Sum
+#pragma kernel Pass4_Write
+
+// 2D thread group size for image-sized passes
+[numthreads(16, 16, 1)]
+void Pass1_CountMax(uint3 id : SV_DispatchThreadID);
+[numthreads(16, 16, 1)]
+void Pass3_Sum(uint3 id : SV_DispatchThreadID);
+[numthreads(16, 16, 1)]
+void Pass4_Write(uint3 id : SV_DispatchThreadID);
+
+// 1D thread group size for region-indexed passes
+[numthreads(256, 1, 1)]
+void ResetBuffers(uint3 id : SV_DispatchThreadID);
+[numthreads(256, 1, 1)]
+void Pass2_ComputeScale(uint3 id : SV_DispatchThreadID);
+
+// Resources
+Texture2D<float>   _DepthTex;
+Texture2D<float4>  _RegionTex;
+RWTexture2D<float> _Output; // RFloat
+
+RWStructuredBuffer<uint> _Count;        // count per id
+RWStructuredBuffer<uint> _MaxDepthMm;   // max depth per id (millimeters)
+RWStructuredBuffer<uint> _SumScaled;    // sum of (depth * scale[id]) per id
+RWStructuredBuffer<uint> _Scale;        // scale per id (unit: 1/m)
+
+// Params
+cbuffer Params {
+    uint2 _RegionSize; // (w, h)
+    uint2 _DepthSize;  // (w, h)
+    uint  _NumRegions; // maxId + 1
+    int   _ZeroRegionMode; // 0:-1, 1:0, 2:treat as region, 3:passthrough
+}
+
+// Helpers
+static const uint UINT_MAX_SAFE = 0xFFFFFFEF; // margin to avoid exact overflow
+
+uint DecodeRegionId(float4 c01)
+{
+    // 同等処理のベクトル化（分岐なし）
+    uint4 p = (uint4)round(saturate(c01) * 255.0);
+    return p.x | (p.y << 8) | (p.z << 16) | (p.w << 24);
+}
+
+int2 MapRegionToDepth(uint2 rp)
+{
+    // Map region pixel center to depth pixel index (nearest)
+    // dx = floor((x+0.5)*Dw/Rw), dy = floor((y+0.5)*Dh/Rh)
+    float2 rsz = float2(_RegionSize);
+    float2 dsz = float2(_DepthSize);
+    float2 fc = (float2(rp) + 0.5) * dsz / rsz;
+    int2 dp = int2(floor(fc));
+    dp.x = clamp(dp.x, 0, int(_DepthSize.x) - 1);
+    dp.y = clamp(dp.y, 0, int(_DepthSize.y) - 1);
+    return dp;
+}
+
+bool IsDepthValid(float d)
+{
+    // reject non-positive or NaN/Inf
+    return (d > 0.0) && (d == d) && isfinite(d);
+}
+
+// -------------------- Kernels --------------------
+
+void ResetBuffers(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= _NumRegions) return;
+    _Count[idx] = 0u;
+    _MaxDepthMm[idx] = 0u;
+    _SumScaled[idx] = 0u;
+    _Scale[idx] = 0u;
+}
+
+void Pass1_CountMax(uint3 id : SV_DispatchThreadID)
+{
+    // 境界チェックは残す
+    if (id.x >= _RegionSize.x || id.y >= _RegionSize.y) return;
+
+    uint2 rp = id.xy;
+    int2 dp = MapRegionToDepth(rp);
+
+    float depth = _DepthTex.Load(int3(dp, 0));
+    uint  rid   = DecodeRegionId(_RegionTex.Load(int3(rp, 0)));
+
+    // --- 分岐の代わりにマスク ---
+    // valid depth mask
+    uint m_depth = IsDepthValid(depth) ? 1u : 0u;
+    // zero-region handling mask
+    uint m_zero  = (_ZeroRegionMode == 2) ? 1u : 0u;
+    // non-zero region id mask
+    uint m_rid   = (rid != 0u) ? 1u : 0u;
+    // use mask
+    uint m_use   = (m_rid | m_zero) & m_depth;
+
+    // Count += m_use
+    InterlockedAdd(_Count[rid], m_use);
+
+    // MaxDepthMm = max(MaxDepthMm, dmm * m_use)
+    float dmmF = clamp(depth * 1000.0, 0.0, 4.294e9);
+    uint  dmm  = (uint)round(dmmF);
+    uint  cand = dmm * m_use; // not used => 0
+    InterlockedMax(_MaxDepthMm[rid], cand);
+}
+
+void Pass2_ComputeScale(uint3 id : SV_DispatchThreadID)
+{
+    uint rid = id.x;
+    if (rid >= _NumRegions) return;
+
+    uint cnt   = _Count[rid];
+    uint maxMm = _MaxDepthMm[rid];
+
+    // Branchless computation with mask
+    float denom = max(1e-6, (float)cnt * (float)maxMm * (1.0 / 1000.0));
+    float s = floor((float)UINT_MAX_SAFE / denom);
+    s = clamp(s, 1.0, 1.0e9);
+
+    // masks as floats (0.0 or 1.0)
+    float cntMask = (cnt  > 0u) ? 1.0 : 0.0;
+    float maxMask = (maxMm > 0u) ? 1.0 : 0.0;
+    float useMask = cntMask * maxMask;
+
+    uint scale = (uint)max(1.0, s * useMask);
+    _Scale[rid] = scale;
+}
+
+void Pass3_Sum(uint3 id : SV_DispatchThreadID)
+{
+    // 境界チェックは残す
+    if (id.x >= _RegionSize.x || id.y >= _RegionSize.y) return;
+
+    uint2 rp = id.xy;
+    int2 dp = MapRegionToDepth(rp);
+
+    float depth = _DepthTex.Load(int3(dp, 0));
+    uint  rid   = DecodeRegionId(_RegionTex.Load(int3(rp, 0)));
+
+    // --- 分岐の代わりにマスク ---
+    uint m_depth = IsDepthValid(depth) ? 1u : 0u;
+    uint m_zero  = (_ZeroRegionMode == 2) ? 1u : 0u;
+    uint m_rid   = (rid != 0u) ? 1u : 0u;
+    uint m_use   = (m_rid | m_zero) & m_depth;
+
+    uint  scale   = max(_Scale[rid], 1u);
+    float scaledF = clamp(depth * (float)scale, 0.0, 4.294e9);
+    uint  scaled  = (uint)round(scaledF);
+
+    // SumScaled += scaled * m_use
+    InterlockedAdd(_SumScaled[rid], scaled * m_use);
+}
+
+void Pass4_Write(uint3 id : SV_DispatchThreadID)
+{
+    // 安全のため境界チェックを追加
+    if (id.x >= _RegionSize.x || id.y >= _RegionSize.y) return;
+
+    uint2 rp = id.xy;
+    int2 dp  = MapRegionToDepth(rp);
+
+    float depth = _DepthTex.Load(int3(dp, 0));
+    uint  rid   = DecodeRegionId(_RegionTex.Load(int3(rp, 0)));
+
+    // Compute mean branchlessly for any rid
+    uint  cnt   = _Count[rid];
+    uint  scale = max(_Scale[rid], 1u);
+    uint  sum   = _SumScaled[rid];
+
+    float cntMask = (cnt > 0u) ? 1.0 : 0.0; // 1 if cnt>0
+    float denom   = max(1.0, (float)cnt * (float)scale);
+    float meanCandidate = (float)sum / denom;
+    float meanVal = lerp(-1.0, meanCandidate, cntMask);
+
+    // Zero-region mode selection without branches
+    float isZeroF = (rid == 0u) ? 1.0 : 0.0;
+    float modeF = (float)_ZeroRegionMode;
+    float m0 = (modeF == 0.0) ? 1.0 : 0.0; // MinusOne
+    float m1 = (modeF == 1.0) ? 1.0 : 0.0; // Zero
+    float m2 = (modeF == 2.0) ? 1.0 : 0.0; // TreatAsRegion
+    float m3 = (modeF == 3.0) ? 1.0 : 0.0; // PassthroughDepth
+    float zeroOut = (-1.0) * m0 + 0.0 * m1 + meanVal * m2 + depth * m3;
+
+    float outNonZero = meanVal;
+    float outVal = lerp(outNonZero, zeroOut, isZeroF);
+
+    // Write without Y flip to match region/depth textures as provided.
+    _Output[rp] = outVal;
+}

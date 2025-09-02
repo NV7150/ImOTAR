@@ -554,7 +554,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 759677851}
-  - component: {fileID: 759677850}
+  - component: {fileID: 759677852}
   m_Layer: 0
   m_Name: CVProcess
   m_TagString: Untagged
@@ -562,34 +562,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &759677850
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 759677849}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dac48624c57ea4c15a3d50ba9d74469d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  cameraManager: {fileID: 655652080}
-  output: {fileID: 8400000, guid: 1d99f49856f8e40a2bd8ddc94b1886c5, type: 2}
-  blurKernelSize: 2
-  thresh: 0
-  useOtsu: 1
-  useSlicSeeds: 0
-  slicAlgorithm: 101
-  slicRegionSize: 12
-  slicRuler: 10
-  slicIterate: 10
-  gradApertureSize: 3
-  unknownDilate: 2
-  blendWithOriginal: 1
-  blendAlpha: 0.5
-  verboseLogs: 0
-  throwOnError: 0
 --- !u!4 &759677851
 Transform:
   m_ObjectHideFlags: 0
@@ -605,6 +577,29 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &759677852
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 759677849}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d838a663ed7e14cf9bdb11491a69f6c9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  cameraManager: {fileID: 655652080}
+  output: {fileID: 8400000, guid: dac1d7704b1c34d339b3a99e5f621d78, type: 2}
+  downscale: 1
+  mirrorX: 1
+  blurKernelSize: 2
+  thresh: 0
+  useOtsu: 1
+  gradApertureSize: 3
+  unknownDilate: 2
+  verboseLogs: 0
+  throwOnError: 0
 --- !u!1 &786032433
 GameObject:
   m_ObjectHideFlags: 0
@@ -954,7 +949,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1344c3c82d62a2a41a3576d8abb8e3ea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 2100000, guid: 1d1404f9081fc41969d93a66021c9883, type: 2}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
@@ -962,7 +957,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Texture: {fileID: 8400000, guid: 1d99f49856f8e40a2bd8ddc94b1886c5, type: 2}
+  m_Texture: {fileID: 0}
   m_UVRect:
     serializedVersion: 2
     x: 0
