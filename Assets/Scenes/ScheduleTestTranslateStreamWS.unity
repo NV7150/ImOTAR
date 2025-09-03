@@ -2574,6 +2574,9 @@ MonoBehaviour:
   output: {fileID: 8400000, guid: 4093feb22a24d474f8c89aad7441ac8f, type: 2}
   debugLogStats: 0
   debugLogCount: 8
+  useEMA: 1
+  alphaInner: 0.5
+  alphaBoundary: 0.9
 --- !u!114 &1956616881
 MonoBehaviour:
   m_ObjectHideFlags: 0

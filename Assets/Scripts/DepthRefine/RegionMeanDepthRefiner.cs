@@ -25,6 +25,11 @@ public class RegionMeanDepthRefiner : DepthRefiner {
     [SerializeField] private bool debugLogStats = true; 
     [SerializeField, Range(1, 64)] private int debugLogCount = 8;
 
+    [Header("Temporal EMA")]
+    [SerializeField] private bool useEMA = true;
+    [SerializeField, Range(0f, 1f)] private float alphaInner = 0.3f;
+    [SerializeField, Range(0f, 1f)] private float alphaBoundary = 0.7f;
+
     private int kReset, kPass1, kPass2, kPass3, kPass4;
 
     private ComputeBuffer countBuf;      // uint[numRegions]
@@ -32,6 +37,9 @@ public class RegionMeanDepthRefiner : DepthRefiner {
     private ComputeBuffer sumScaledBuf;  // uint[numRegions]
     private ComputeBuffer scaleBuf;      // uint[numRegions]
     private int allocatedRegions = 0;
+
+    private RenderTexture prevOutput; // RFloat, region-sized (read-only in compute)
+    private bool prevValid = false;
 
     private void OnEnable() {
         if (shader == null) throw new InvalidOperationException("[RegionMeanDepthRefiner] ComputeShader is not assigned.");
@@ -65,6 +73,7 @@ public class RegionMeanDepthRefiner : DepthRefiner {
         if (rw <= 0 || rh <= 0 || dw <= 0 || dh <= 0) throw new InvalidOperationException("[RegionMeanDepthRefiner] Invalid texture dimensions.");
         
         EnsureOutput(rw, rh);
+        EnsurePrevOutput(rw, rh);
 
         int numRegions = Mathf.Max(1, regionProvider.CurrentRegionCount + 1); // include id==0
         EnsureBuffers(numRegions);
@@ -74,6 +83,10 @@ public class RegionMeanDepthRefiner : DepthRefiner {
         shader.SetInts("_DepthSize", dw, dh);
         shader.SetInt("_NumRegions", numRegions);
         shader.SetInt("_ZeroRegionMode", Mathf.Clamp((int)zeroRegionMode, 0, 3));
+        shader.SetInt("_UseEMA", useEMA ? 1 : 0);
+        shader.SetInt("_PrevValid", prevValid ? 1 : 0);
+        shader.SetFloat("_AlphaInner", Mathf.Clamp01(alphaInner));
+        shader.SetFloat("_AlphaBoundary", Mathf.Clamp01(alphaBoundary));
 
         // Bind SRVs/RW
         shader.SetTexture(kPass1, "_DepthTex", dRT);
@@ -82,6 +95,7 @@ public class RegionMeanDepthRefiner : DepthRefiner {
         shader.SetTexture(kPass3, "_RegionTex", rRT);
         shader.SetTexture(kPass4, "_DepthTex", dRT);
         shader.SetTexture(kPass4, "_RegionTex", rRT);
+        if (prevOutput != null) shader.SetTexture(kPass4, "_PrevOutput", prevOutput);
         shader.SetTexture(kPass4, "_Output", output);
 
         shader.SetBuffer(kReset, "_Count", countBuf);
@@ -123,6 +137,14 @@ public class RegionMeanDepthRefiner : DepthRefiner {
         // Pass4: write output
         shader.Dispatch(kPass4, gx, gy, 1);
 
+        // Update prev output for next frame if EMA is enabled
+        if (useEMA && output != null && prevOutput != null) {
+            Graphics.Blit(output, prevOutput);
+            prevValid = true;
+        } else {
+            prevValid = false;
+        }
+
         if (debugLogStats) {
             int n = Mathf.Min(numRegions, Mathf.Max(1, debugLogCount));
             uint[] dbgCount = new uint[n];
@@ -150,6 +172,7 @@ public class RegionMeanDepthRefiner : DepthRefiner {
             output.Release();
             DestroyImmediate(output);
             output = null;
+            prevValid = false;
         }
         if (output == null) {
             output = new RenderTexture(w, h, 0, RenderTextureFormat.RFloat, RenderTextureReadWrite.Linear);
@@ -160,6 +183,24 @@ public class RegionMeanDepthRefiner : DepthRefiner {
             if (!output.Create()) throw new InvalidOperationException("[RegionMeanDepthRefiner] Failed to create output RenderTexture.");
         }
         if (!output.enableRandomWrite) throw new InvalidOperationException("[RegionMeanDepthRefiner] Output must have enableRandomWrite=true.");
+    }
+
+    private void EnsurePrevOutput(int w, int h) {
+        if (prevOutput != null && (prevOutput.width != w || prevOutput.height != h || prevOutput.format != RenderTextureFormat.RFloat)) {
+            prevOutput.Release();
+            DestroyImmediate(prevOutput);
+            prevOutput = null;
+            prevValid = false;
+        }
+        if (prevOutput == null) {
+            prevOutput = new RenderTexture(w, h, 0, RenderTextureFormat.RFloat, RenderTextureReadWrite.Linear);
+            prevOutput.enableRandomWrite = false;
+            prevOutput.useMipMap = false;
+            prevOutput.wrapMode = TextureWrapMode.Clamp;
+            prevOutput.filterMode = FilterMode.Point;
+            if (!prevOutput.Create()) throw new InvalidOperationException("[RegionMeanDepthRefiner] Failed to create prev RenderTexture.");
+            prevValid = false;
+        }
     }
 
     private void EnsureBuffers(int numRegions) {
@@ -181,6 +222,10 @@ public class RegionMeanDepthRefiner : DepthRefiner {
         sumScaledBuf?.Dispose(); sumScaledBuf = null;
         scaleBuf?.Dispose(); scaleBuf = null;
         allocatedRegions = 0;
+    }
+
+    private void OnDestroy() {
+        if (prevOutput != null) { prevOutput.Release(); DestroyImmediate(prevOutput); prevOutput = null; }
     }
 }
 
