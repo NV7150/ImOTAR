@@ -1,0 +1,144 @@
+#pragma kernel KClear
+#pragma kernel KMinDepth
+#pragma kernel KResolve
+
+// Forward warp with Z-test in compute (two-pass):
+// 1) KClear: Initialize output to -1 and Z buffer to +inf
+// 2) KMinDepth: For each source pixel, project to target and atomically update min depth
+// 3) KResolve: For each source pixel, project again and if its depth equals min, write value
+
+// Inputs
+Texture2D<float> _SrcTex;      // RFloat source mask/value (snapshot at source time)
+Texture2D<float> _DepthSrc;    // RFloat source depth (meters) at source time
+
+// Outputs
+RWTexture2D<float> _OutTex;    // RFloat output; holes as -1
+RWStructuredBuffer<uint> _ZBuf; // linear buffer (size=_DstWidth*_DstHeight), atomic-friendly on Metal
+
+// Parameters
+int _SrcWidth;
+int _SrcHeight;
+int _DstWidth;
+int _DstHeight;
+
+float _Fx, _Fy; // normalized intrinsics
+float _Cx, _Cy;
+float4x4 _R;    // source->current rotation (use 3x3)
+float3 _t;      // source->current translation (meters) in current camera frame
+
+// Helpers
+float3x3 K_from_norm()
+{
+    return float3x3(_Fx, 0.0, _Cx,
+                    0.0, _Fy, _Cy,
+                    0.0, 0.0, 1.0);
+}
+
+float3x3 Kinv_from_norm()
+{
+    return float3x3(1.0/_Fx, 0.0,     -_Cx/_Fx,
+                    0.0,     1.0/_Fy, -_Cy/_Fy,
+                    0.0,     0.0,      1.0);
+}
+
+uint floatToOrderedUint(float z)
+{
+    // Assumes z is positive; for positive floats, bit pattern is monotonic
+    return asuint(z);
+}
+
+int2 clampToDst(int2 p)
+{
+    p.x = clamp(p.x, 0, _DstWidth - 1);
+    p.y = clamp(p.y, 0, _DstHeight - 1);
+    return p;
+}
+
+int linearIndex(int2 p)
+{
+    return p.y * _DstWidth + p.x;
+}
+
+[numthreads(16, 16, 1)]
+void KClear(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_DstWidth || id.y >= (uint)_DstHeight) return;
+    int2 p = int2(id.xy);
+    _OutTex[p] = -1.0;
+    int idx = linearIndex(p);
+    _ZBuf[idx] = 0x7f7fffff; // ~ +infinity (largest positive float)
+}
+
+[numthreads(16, 16, 1)]
+void KMinDepth(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_SrcWidth || id.y >= (uint)_SrcHeight) return;
+
+    int2 ps = int2(id.xy);
+    float z_s = _DepthSrc.Load(int3(ps, 0));
+    if (z_s <= 0.0) return;
+
+    float2 uv_s = (float2(ps) + 0.5) / float2(_SrcWidth, _SrcHeight);
+
+    float3x3 Kinv = Kinv_from_norm();
+    float3x3 K = K_from_norm();
+    float3 x_s = float3(uv_s, 1.0);
+    float3 P_s = z_s * mul(Kinv, x_s);
+
+    float3x3 R3 = (float3x3)_R;
+    float3 P_t = mul(R3, P_s) + _t;
+    if (P_t.z <= 0.0) return;
+
+    float3 x_t = mul(K, P_t);
+    float2 uv_t = x_t.xy / max(x_t.z, 1e-6);
+    if (uv_t.x < 0.0 || uv_t.x > 1.0 || uv_t.y < 0.0 || uv_t.y > 1.0) return;
+
+    int2 pd = int2(uv_t * float2(_DstWidth, _DstHeight));
+    pd = clampToDst(pd);
+
+    uint zBits = floatToOrderedUint(P_t.z);
+    int idx = linearIndex(pd);
+    uint oldVal;
+    InterlockedMin(_ZBuf[idx], zBits, oldVal);
+}
+
+[numthreads(16, 16, 1)]
+void KResolve(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_SrcWidth || id.y >= (uint)_SrcHeight) return;
+
+    int2 ps = int2(id.xy);
+    float z_s = _DepthSrc.Load(int3(ps, 0));
+    if (z_s <= 0.0) return;
+
+    float val = _SrcTex.Load(int3(ps, 0));
+    // If source is invalid, skip writing
+    if (val < 0.0) return;
+
+    float2 uv_s = (float2(ps) + 0.5) / float2(_SrcWidth, _SrcHeight);
+
+    float3x3 Kinv = Kinv_from_norm();
+    float3x3 K = K_from_norm();
+    float3 x_s = float3(uv_s, 1.0);
+    float3 P_s = z_s * mul(Kinv, x_s);
+
+    float3x3 R3 = (float3x3)_R;
+    float3 P_t = mul(R3, P_s) + _t;
+    if (P_t.z <= 0.0) return;
+
+    float3 x_t = mul(K, P_t);
+    float2 uv_t = x_t.xy / max(x_t.z, 1e-6);
+    if (uv_t.x < 0.0 || uv_t.x > 1.0 || uv_t.y < 0.0 || uv_t.y > 1.0) return;
+
+    int2 pd = int2(uv_t * float2(_DstWidth, _DstHeight));
+    pd = clampToDst(pd);
+
+    uint zBits = floatToOrderedUint(P_t.z);
+    int idx = linearIndex(pd);
+    if (zBits == _ZBuf[idx])
+    {
+        _OutTex[pd] = val;
+    }
+}
+
+

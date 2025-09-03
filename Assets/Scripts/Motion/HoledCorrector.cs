@@ -6,40 +6,34 @@ using System;
 using System.Collections.Generic;
 
 [DisallowMultipleComponent]
-public class TransformCorrector : AsyncFrameProvider {
+public class HoledCorrector : AsyncFrameProvider {
     [Header("Inputs")]
     [SerializeField] private MotionObtain motionSource;
     [SerializeField] private AsyncFrameProvider sourceProvider; // Previous PromptDA (or base) output provider
     [SerializeField] private Scheduler scheduler;               // For update requests
 
     [Header("Depth Input (meters)")]
-    [SerializeField] private RenderTexture lowResDepthMeters;   // Low-res depth RT (meters)
+    [SerializeField] private RenderTexture lowResDepthMeters;   // Real-time depth (low-res, meters)
 
     [Header("Output (this FrameProvider)")]
-    [SerializeField] private RenderTexture transformedMask;     // Final output (same size as source)
+    [SerializeField] private RenderTexture transformedMask;     // Final output (holes=-1)
 
-    [Header("Material")] 
-    [SerializeField] private Material se3BackwarpMaterial;      // ImOTAR/TranslateProjective (SE3 backwarp)
+    [Header("Compute")] 
+    [SerializeField] private ComputeShader fowardTransformCS;   // FowardTransform.compute
 
     [Header("Intrinsics (normalized)")]
-    [SerializeField] private ARCameraManager _arCameraManager;  // Auto from AR
+    [SerializeField] private ARCameraManager _arCameraManager;  
 
-    [Header("Holes Backwarp Params")] 
-    [SerializeField] private bool useNearestSampling = true;    // _UseNearest (1=Nearest, 0=Bilinear)
-    [SerializeField, Range(0f, 1f)] private float maxUvDispNormalized = 0.01f; // _MaxUvDispN (normalized uv units)
-
-    [Header("Rotation Threshold (deg)")]
+    [Header("Update Thresholds")] 
     [SerializeField] private bool useYaw = true;
     [SerializeField] private bool usePitch = false;
     [SerializeField] private bool useRoll = false;
     [SerializeField] private float updateRequestRotationThresholdDeg = 3f;
-
-    [Header("Translation Threshold (meters)")]
     [SerializeField] private float updateRequestTranslationThresholdMeters = 0.02f;
 
     [Header("Debug")] 
     [SerializeField] private bool verboseLogging = true;
-    [SerializeField] private string logPrefix = "[TransformCorrector-SE3]";
+    [SerializeField] private string logPrefix = "[HoledCorrector-FWD]";
 
     // Internal
     private bool _hasIntrinsics;
@@ -47,24 +41,28 @@ public class TransformCorrector : AsyncFrameProvider {
     private int _intrinsicWidth, _intrinsicHeight;
     private DateTime _timestamp;
 
-    private RenderTexture _capturedSource; // previous source snapshot
-    private Dictionary<Guid, Quaternion> _startPoseByJobId = new Dictionary<Guid, Quaternion>();
-    private Dictionary<Guid, Vector3> _startPosByJobId = new Dictionary<Guid, Vector3>();
-    private Quaternion _sourcePoseAtStart = Quaternion.identity;
-    private Vector3 _sourcePosAtStart = Vector3.zero;
+    private RenderTexture _capturedSource; // source-time mask snapshot
+    private RenderTexture _capturedDepth;  // source-time depth snapshot (meters, upscaled to source size)
     private bool _hasSnapshot;
 
-    private RenderTexture _upscaledDepth; // internal upscaled depth to output size
+    // Compute resources
+    private int _kClear, _kMinDepth, _kResolve;
+    private RenderTexture _outUav; // internal UAV if needed
+    private ComputeBuffer _zBuf;   // Structured uint buffer (size = dstW*dstH)
 
     public override RenderTexture FrameTex => transformedMask;
     public override DateTime TimeStamp => _timestamp;
 
     private void OnEnable(){
-        if (motionSource == null) throw new NullReferenceException("TransformCorrector: motionSource not assigned");
-        if (sourceProvider == null) throw new NullReferenceException("TransformCorrector: sourceProvider not assigned");
-        if (se3BackwarpMaterial == null) throw new NullReferenceException("TransformCorrector: se3BackwarpMaterial not assigned");
-        if (transformedMask == null) throw new NullReferenceException("TransformCorrector: transformedMask not assigned");
-        if (scheduler == null) throw new NullReferenceException("TransformCorrector: scheduler not assigned");
+        if (motionSource == null) throw new NullReferenceException("HoledCorrector: motionSource not assigned");
+        if (sourceProvider == null) throw new NullReferenceException("HoledCorrector: sourceProvider not assigned");
+        if (fowardTransformCS == null) throw new NullReferenceException("HoledCorrector: fowardTransformCS not assigned");
+        if (transformedMask == null) throw new NullReferenceException("HoledCorrector: transformedMask not assigned");
+        if (scheduler == null) throw new NullReferenceException("HoledCorrector: scheduler not assigned");
+
+        _kClear    = fowardTransformCS.FindKernel("KClear");
+        _kMinDepth = fowardTransformCS.FindKernel("KMinDepth");
+        _kResolve  = fowardTransformCS.FindKernel("KResolve");
 
         sourceProvider.OnAsyncFrameStarted += OnSourceJobStarted;
         sourceProvider.OnAsyncFrameUpdated += OnSourceJobCompleted;
@@ -79,8 +77,10 @@ public class TransformCorrector : AsyncFrameProvider {
             sourceProvider.OnAsyncFrameUpdated -= OnSourceJobCompleted;
             sourceProvider.OnAsyncFrameCanceled -= OnSourceJobCanceled;
         }
-        ReleaseRT(ref _upscaledDepth);
         ReleaseRT(ref _capturedSource);
+        ReleaseRT(ref _capturedDepth);
+        ReleaseRT(ref _outUav);
+        ReleaseBuffer(ref _zBuf);
     }
 
     private System.Collections.IEnumerator WaitForIntrinsics(){
@@ -111,8 +111,7 @@ public class TransformCorrector : AsyncFrameProvider {
 
     private void InitOutputOnce(){
         if (!IsInitTexture){
-            transformedMask.wrapMode = TextureWrapMode.Clamp;
-            transformedMask.filterMode = FilterMode.Bilinear;
+            // Initialize with -1
             var active = RenderTexture.active;
             RenderTexture.active = transformedMask;
             GL.Clear(false, true, new Color(-1f, -1f, -1f, 1f));
@@ -123,55 +122,68 @@ public class TransformCorrector : AsyncFrameProvider {
     }
 
     private void LateUpdate(){
-        if (!IsInitTexture || !_hasSnapshot || _capturedSource == null) return;
+        if (!IsInitTexture || !_hasSnapshot || _capturedSource == null || _capturedDepth == null) return;
         if (!_hasIntrinsics) return;
-        if (lowResDepthMeters == null){
-            if (verboseLogging) Debug.LogWarning($"{logPrefix} Skip: lowResDepthMeters not assigned");
-            return;
-        }
-        EnsureUpscaledDepth(transformedMask.width, transformedMask.height);
-        // Bilinear upscale: simple blit
-        Graphics.Blit(lowResDepthMeters, _upscaledDepth);
-
         ValidateOutputRT(_capturedSource);
-        ProcessSE3Backwarp(_capturedSource, _upscaledDepth);
+        EnsureInternalTargets(transformedMask.width, transformedMask.height);
+        ProcessForwardWarp(_capturedSource, _capturedDepth);
         _timestamp = DateTime.Now;
         TickUp();
     }
 
-    private void ProcessSE3Backwarp(RenderTexture srcPrev, RenderTexture depthCurUpscaled){
+    private void ProcessForwardWarp(RenderTexture srcAtStart, RenderTexture depthAtStart){
         if (!motionSource.TryGetLatestData<AbsoluteRotationData>(out var rotAbs)) return;
         if (!motionSource.TryGetLatestData<AbsolutePositionData>(out var posAbs)) return;
 
-        // RotationCorrector 準拠の相対回転（しきい値・ログ用）
-        Quaternion relRotRC = Quaternion.Inverse(_sourcePoseAtStart) * rotAbs.Rotation;
-
-        // バックワープ用の source->current 変換（current座標系）
+        // source->current transform in current frame
         Quaternion R_wc0 = _sourcePoseAtStart;        // source -> world
         Quaternion R_wc1 = rotAbs.Rotation;           // current -> world
         Quaternion relRotSC = Quaternion.Inverse(R_wc1) * R_wc0; // source->current in current frame
         Vector3     relPos   = Quaternion.Inverse(R_wc1) * (_sourcePosAtStart - posAbs.Position);
 
-        // Set SE3 params
-        Matrix4x4 R = Matrix4x4.Rotate(relRotSC);
-        se3BackwarpMaterial.SetMatrix("_R", R);
-        se3BackwarpMaterial.SetVector("_t", relPos);
-        se3BackwarpMaterial.SetFloat("_Fx", _fxN);
-        se3BackwarpMaterial.SetFloat("_Fy", _fyN);
-        se3BackwarpMaterial.SetFloat("_Cx", _cxN);
-        se3BackwarpMaterial.SetFloat("_Cy", _cyN);
-        se3BackwarpMaterial.SetTexture("_MainTex", srcPrev);
-        se3BackwarpMaterial.SetTexture("_DepthTex", depthCurUpscaled);
+        int dstW = transformedMask.width;
+        int dstH = transformedMask.height;
+        int srcW = srcAtStart.width;
+        int srcH = srcAtStart.height;
 
-        // Params for ImOTAR/TranslateProjectiveHoles (fail fast if missing)
-        se3BackwarpMaterial.SetFloat("_UseNearest", useNearestSampling ? 1f : 0f);
-        se3BackwarpMaterial.SetFloat("_MaxUvDispN", Mathf.Max(0f, maxUvDispNormalized));
+        // Clear pass (dst domain)
+        fowardTransformCS.SetInt("_DstWidth", dstW);
+        fowardTransformCS.SetInt("_DstHeight", dstH);
+        fowardTransformCS.SetTexture(_kClear, "_OutTex", GetOutUav());
+        fowardTransformCS.SetBuffer(_kClear, "_ZBuf", _zBuf);
+        Dispatch(_kClear, dstW, dstH);
 
-        // No display transform: inputs are assumed already screen-aligned with no extra flips
+        // Common params
+        fowardTransformCS.SetInt("_SrcWidth", srcW);
+        fowardTransformCS.SetInt("_SrcHeight", srcH);
+        fowardTransformCS.SetInt("_DstWidth", dstW);
+        fowardTransformCS.SetInt("_DstHeight", dstH);
+        fowardTransformCS.SetFloat("_Fx", _fxN);
+        fowardTransformCS.SetFloat("_Fy", _fyN);
+        fowardTransformCS.SetFloat("_Cx", _cxN);
+        fowardTransformCS.SetFloat("_Cy", _cyN);
+        fowardTransformCS.SetMatrix("_R", Matrix4x4.Rotate(relRotSC));
+        fowardTransformCS.SetVector("_t", relPos);
 
-        Graphics.Blit(srcPrev, transformedMask, se3BackwarpMaterial, 0);
+        // MinDepth pass (src domain)
+        fowardTransformCS.SetTexture(_kMinDepth, "_DepthSrc", depthAtStart);
+        fowardTransformCS.SetBuffer(_kMinDepth, "_ZBuf", _zBuf);
+        Dispatch(_kMinDepth, srcW, srcH);
 
-        // Update request policy
+        // Resolve pass (src domain)
+        fowardTransformCS.SetTexture(_kResolve, "_DepthSrc", depthAtStart);
+        fowardTransformCS.SetTexture(_kResolve, "_SrcTex", srcAtStart);
+        fowardTransformCS.SetBuffer(_kResolve, "_ZBuf", _zBuf);
+        fowardTransformCS.SetTexture(_kResolve, "_OutTex", GetOutUav());
+        Dispatch(_kResolve, srcW, srcH);
+
+        // Copy to provided output if needed
+        if (_outUav != null && transformedMask != _outUav){
+            Graphics.Blit(_outUav, transformedMask);
+        }
+
+        // Update request policy (same as TransformCorrector)
+        Quaternion relRotRC = Quaternion.Inverse(_sourcePoseAtStart) * rotAbs.Rotation;
         bool req = false;
         if (updateRequestRotationThresholdDeg > 0f){
             Vector3 e = relRotRC.eulerAngles;
@@ -190,26 +202,60 @@ public class TransformCorrector : AsyncFrameProvider {
         }
     }
 
-    private void EnsureUpscaledDepth(int w, int h){
-        if (_upscaledDepth != null && _upscaledDepth.width == w && _upscaledDepth.height == h) return;
-        ReleaseRT(ref _upscaledDepth);
-        _upscaledDepth = new RenderTexture(w, h, 0, RenderTextureFormat.RFloat){
-            wrapMode = TextureWrapMode.Clamp,
-            filterMode = FilterMode.Bilinear,
-            useMipMap = false,
-            autoGenerateMips = false
-        };
-        _upscaledDepth.Create();
+    private void EnsureInternalTargets(int w, int h){
+        // Output UAV
+        bool needUav = transformedMask == null || !transformedMask.enableRandomWrite;
+        if (!needUav){
+            // Ensure sizes match
+            if (transformedMask.width != w || transformedMask.height != h){
+                throw new InvalidOperationException("HoledCorrector: transformedMask size must match source size");
+            }
+            ReleaseRT(ref _outUav);
+        } else {
+            if (_outUav == null || _outUav.width != w || _outUav.height != h){
+                ReleaseRT(ref _outUav);
+                _outUav = new RenderTexture(w, h, 0, RenderTextureFormat.RFloat){
+                    enableRandomWrite = true,
+                    useMipMap = false,
+                    autoGenerateMips = false,
+                    wrapMode = TextureWrapMode.Clamp,
+                    filterMode = FilterMode.Bilinear
+                };
+                _outUav.Create();
+            }
+        }
+
+        // Z buffer (structured uint buffer)
+        int needed = w * h;
+        if (_zBuf == null || _zBuf.count != needed){
+            ReleaseBuffer(ref _zBuf);
+            _zBuf = new ComputeBuffer(needed, sizeof(uint), ComputeBufferType.Structured);
+        }
+    }
+
+    private RenderTexture GetOutUav(){
+        return (transformedMask != null && transformedMask.enableRandomWrite) ? transformedMask : _outUav;
+    }
+
+    private void Dispatch(int kernel, int w, int h){
+        int gx = Mathf.CeilToInt(w / 16.0f);
+        int gy = Mathf.CeilToInt(h / 16.0f);
+        fowardTransformCS.Dispatch(kernel, gx, gy, 1);
     }
 
     private void ValidateOutputRT(RenderTexture src){
         if (transformedMask.width != src.width || transformedMask.height != src.height){
-            throw new InvalidOperationException("TransformCorrector: transformedMask size must match source size");
+            throw new InvalidOperationException("HoledCorrector: transformedMask size must match source size");
         }
     }
 
     // ---- Source async event handlers ----
     private Guid _lastCompletedJobId = Guid.Empty;
+    private Quaternion _sourcePoseAtStart = Quaternion.identity;
+    private Vector3 _sourcePosAtStart = Vector3.zero;
+
+    private Dictionary<Guid, Quaternion> _startPoseByJobId = new Dictionary<Guid, Quaternion>();
+    private Dictionary<Guid, Vector3> _startPosByJobId = new Dictionary<Guid, Vector3>();
 
     private void OnSourceJobStarted(Guid jobId){
         Quaternion pose = Quaternion.identity;
@@ -232,6 +278,13 @@ public class TransformCorrector : AsyncFrameProvider {
 
         EnsureCapturedSource(src);
         Graphics.CopyTexture(src, _capturedSource);
+
+        // Snapshot depth at source time: upscale to source size and store
+        if (lowResDepthMeters == null)
+            throw new NullReferenceException($"{logPrefix} JobCompleted: lowResDepthMeters not assigned");
+        EnsureCapturedDepth(src.width, src.height);
+        Graphics.Blit(lowResDepthMeters, _capturedDepth);
+
         _hasSnapshot = true;
         _sourcePoseAtStart = poseAtStart;
         _sourcePosAtStart = posAtStart;
@@ -252,13 +305,31 @@ public class TransformCorrector : AsyncFrameProvider {
         _capturedSource.Create();
     }
 
+    private void EnsureCapturedDepth(int w, int h){
+        if (_capturedDepth != null && _capturedDepth.width == w && _capturedDepth.height == h) return;
+        ReleaseRT(ref _capturedDepth);
+        _capturedDepth = new RenderTexture(w, h, 0, RenderTextureFormat.RFloat){
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear,
+            useMipMap = false,
+            autoGenerateMips = false,
+            enableRandomWrite = false
+        };
+        _capturedDepth.Create();
+    }
+
     private static float NormalizeDegrees(float deg){ return Mathf.Repeat(deg + 180f, 360f) - 180f; }
 
     private static void ReleaseRT(ref RenderTexture rt){
         if (rt == null) return;
         if (rt.IsCreated()) rt.Release();
-        UnityEngine.Object.Destroy(rt);
         rt = null;
+    }
+
+    private static void ReleaseBuffer(ref ComputeBuffer buf){
+        if (buf == null) return;
+        buf.Release();
+        buf = null;
     }
 }
 

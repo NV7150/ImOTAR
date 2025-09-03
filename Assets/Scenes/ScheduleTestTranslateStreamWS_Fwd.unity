@@ -2298,7 +2298,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1927989994}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 771f704400e904916a9cfdcb64cd139d, type: 3}
+  m_Script: {fileID: 11500000, guid: 1f657638e03a341e4b52c08e97551ecd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   motionSource: {fileID: 1927989998}
@@ -2306,17 +2306,15 @@ MonoBehaviour:
   scheduler: {fileID: 614587372}
   lowResDepthMeters: {fileID: 8400000, guid: d5dae7e4603d4450d93aeb424dc4c4d0, type: 2}
   transformedMask: {fileID: 8400000, guid: 5f0cf0a0c21424e18bad1893ef5d22e5, type: 2}
-  se3BackwarpMaterial: {fileID: 2100000, guid: 2b1b467110f6f4fd3b045670d871d022, type: 2}
+  fowardTransformCS: {fileID: 7200000, guid: 4bd3b428fb3904a31b9ecc05b98f91bf, type: 3}
   _arCameraManager: {fileID: 1461364221}
-  useNearestSampling: 0
-  maxUvDispNormalized: 0.25
   useYaw: 1
   usePitch: 1
   useRoll: 1
   updateRequestRotationThresholdDeg: 10
   updateRequestTranslationThresholdMeters: 0.05
-  verboseLogging: 0
-  logPrefix: '[TransformCorrector]'
+  verboseLogging: 1
+  logPrefix: '[HoledCorrector-FWD]'
 --- !u!1 &1951123224
 GameObject:
   m_ObjectHideFlags: 0

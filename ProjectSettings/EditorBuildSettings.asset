@@ -23,6 +23,12 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/ScheduleTestTranslateStreamWS.unity
     guid: a4d72292e33eb48acbf4e0b5d41b35cf
+  - enabled: 0
+    path: Assets/Scenes/ScheduleTestTranslateStreamWS_Fwd.unity
+    guid: 69e7a68ea0d54436a8855a6f7692a626
+  - enabled: 0
+    path: Assets/Scenes/ScheduleTestTranslatGrad.unity
+    guid: 5af5bfd59cc9d49508e7c693795b6717
   m_configObjects:
     UnityEditor.XR.ARCore.ARCoreSettings: {fileID: 11400000, guid: e71a044b8587441c58abd76a26eb971d, type: 2}
     UnityEditor.XR.ARKit.ARKitSettings: {fileID: 11400000, guid: c8b7a705697ad4ddebe33ba1efd63d78, type: 2}

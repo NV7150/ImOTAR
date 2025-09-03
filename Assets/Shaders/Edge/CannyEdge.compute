@@ -1,0 +1,174 @@
+#pragma kernel KGaussLuma
+#pragma kernel KSobel
+#pragma kernel KNms
+#pragma kernel KHysteresis
+
+// Canny pipeline on luma:
+// 1) KGaussLuma: Source RGB -> blurred luma (_LumaTex)
+// 2) KSobel: _LumaTex -> gradient magnitude (_MagTex) and direction unit vector (_DirTex)
+// 3) KNms: Non-maximum suppression -> _NmsTex
+// 4) KHysteresis: double threshold + neighbor tracking -> _EdgeOut (0..1)
+
+Texture2D<float4> _SourceTex;  // SRV, input color
+RWTexture2D<float> _LumaTex;   // RFloat
+
+Texture2D<float> _LumaIn;      // SRV (for Sobel)
+RWTexture2D<float> _MagTex;    // RFloat
+RWTexture2D<float2> _DirTex;   // RGFloat: normalized (gx, gy)
+
+Texture2D<float> _MagIn;       // SRV (for NMS)
+Texture2D<float2> _DirIn;      // SRV (for NMS)
+RWTexture2D<float> _NmsTex;    // RFloat
+
+Texture2D<float> _NmsIn;       // SRV (for Hysteresis)
+Texture2D<float> _EdgeIn;      // SRV (previous edge state, 0..1) for propagation
+RWTexture2D<float> _EdgeOut;   // RFloat
+
+int _Width;
+int _Height;
+float3 _LumaWeights; // (0.299, 0.587, 0.114)
+float _LowThreshold;  // e.g., 0.04
+float _HighThreshold; // e.g., 0.1 (must be > Low)
+
+int2 ClampCoord(int2 q)
+{
+    q.x = clamp(q.x, 0, _Width - 1);
+    q.y = clamp(q.y, 0, _Height - 1);
+    return q;
+}
+
+[numthreads(16, 16, 1)]
+void KGaussLuma(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_Width || id.y >= (uint)_Height) return;
+    int2 p = int2(id.xy);
+
+    // Procedural 5x5 Gaussian weights (1 4 6 4 1 outer product)/256 without branches
+    float sum = 0.0;
+    for (int j = -2; j <= 2; ++j)
+    {
+        float aj = abs((float)j);
+        float wy = 1.0 * step(1.5, aj)
+                 + 4.0 * (step(0.5, aj) - step(1.5, aj))
+                 + 6.0 * (1.0 - step(0.5, aj));
+        for (int i = -2; i <= 2; ++i)
+        {
+            float ai = abs((float)i);
+            float wx = 1.0 * step(1.5, ai)
+                     + 4.0 * (step(0.5, ai) - step(1.5, ai))
+                     + 6.0 * (1.0 - step(0.5, ai));
+            float w = (wx * wy) * (1.0 / 256.0);
+            int2 q = ClampCoord(p + int2(i, j));
+            float3 rgb = _SourceTex.Load(int3(q, 0)).xyz;
+            float lum = dot(rgb, _LumaWeights);
+            sum += lum * w;
+        }
+    }
+    _LumaTex[p] = sum;
+}
+
+[numthreads(16, 16, 1)]
+void KSobel(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_Width || id.y >= (uint)_Height) return;
+    int2 p = int2(id.xy);
+
+    int2 p00 = ClampCoord(p + int2(-1, -1));
+    int2 p10 = ClampCoord(p + int2( 0, -1));
+    int2 p20 = ClampCoord(p + int2( 1, -1));
+    int2 p01 = ClampCoord(p + int2(-1,  0));
+    int2 p21 = ClampCoord(p + int2( 1,  0));
+    int2 p02 = ClampCoord(p + int2(-1,  1));
+    int2 p12 = ClampCoord(p + int2( 0,  1));
+    int2 p22 = ClampCoord(p + int2( 1,  1));
+
+    float l00 = _LumaIn.Load(int3(p00, 0));
+    float l10 = _LumaIn.Load(int3(p10, 0));
+    float l20 = _LumaIn.Load(int3(p20, 0));
+    float l01 = _LumaIn.Load(int3(p01, 0));
+    float l21 = _LumaIn.Load(int3(p21, 0));
+    float l02 = _LumaIn.Load(int3(p02, 0));
+    float l12 = _LumaIn.Load(int3(p12, 0));
+    float l22 = _LumaIn.Load(int3(p22, 0));
+
+    float gx = (-1.0 * l00) + ( 1.0 * l20)
+             + (-2.0 * l01) + ( 2.0 * l21)
+             + (-1.0 * l02) + ( 1.0 * l22);
+
+    float gy = (-1.0 * l00) + (-2.0 * l10) + (-1.0 * l20)
+             + ( 1.0 * l02) + ( 2.0 * l12) + ( 1.0 * l22);
+
+    float gg = gx * gx + gy * gy;
+    float mag = sqrt(gg);
+    float invMag = rsqrt(max(gg, 1e-12));
+    float2 dir = float2(gx, gy) * invMag; // safe; becomes 0 when gg ~ 0
+    _MagTex[p] = mag;
+    _DirTex[p] = dir;
+}
+
+[numthreads(16, 16, 1)]
+void KNms(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_Width || id.y >= (uint)_Height) return;
+    int2 p = int2(id.xy);
+
+    float mag = _MagIn.Load(int3(p, 0));
+    float2 d = _DirIn.Load(int3(p, 0));
+
+    // Quantize direction to 4 sectors using masks (no dynamic if)
+    float adx = abs(d.x);
+    float ady = abs(d.y);
+    const float k = 0.41421356; // tan(22.5deg)
+    float hMask = step(ady, k * adx);
+    float vMask = (1.0 - hMask) * step(adx, k * ady);
+    float dp = d.x * d.y;
+    float diagPosMask = (1.0 - hMask) * (1.0 - vMask) * step(0.0, dp);
+    float diagNegMask = 1.0 - hMask - vMask - diagPosMask;
+
+    int2 n1h = int2(-1, 0), n2h = int2(1, 0);
+    int2 n1v = int2(0, -1), n2v = int2(0, 1);
+    int2 n1dp = int2(-1, -1), n2dp = int2(1, 1);
+    int2 n1dn = int2(-1, 1),  n2dn = int2(1, -1);
+
+    float m1 = hMask       * _MagIn.Load(int3(ClampCoord(p + n1h), 0))
+             + vMask       * _MagIn.Load(int3(ClampCoord(p + n1v), 0))
+             + diagPosMask * _MagIn.Load(int3(ClampCoord(p + n1dp), 0))
+             + diagNegMask * _MagIn.Load(int3(ClampCoord(p + n1dn), 0));
+    float m2 = hMask       * _MagIn.Load(int3(ClampCoord(p + n2h), 0))
+             + vMask       * _MagIn.Load(int3(ClampCoord(p + n2v), 0))
+             + diagPosMask * _MagIn.Load(int3(ClampCoord(p + n2dp), 0))
+             + diagNegMask * _MagIn.Load(int3(ClampCoord(p + n2dn), 0));
+
+    float keepMask = step(max(m1, m2), mag);
+    float keep = mag * keepMask;
+    _NmsTex[p] = keep;
+}
+
+[numthreads(16, 16, 1)]
+void KHysteresis(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_Width || id.y >= (uint)_Height) return;
+    int2 p = int2(id.xy);
+
+    float m = _NmsIn.Load(int3(p, 0));
+    float strong = step(_HighThreshold, m);
+    float weak = saturate(step(_LowThreshold, m) - strong);
+
+    // neighbor max strong
+    float neighborStrong = 0.0;
+    [unroll]
+    for (int j = -1; j <= 1; ++j)
+    {
+        [unroll]
+        for (int i = -1; i <= 1; ++i)
+        {
+            int2 q = int2(clamp(p.x + i, 0, _Width - 1), clamp(p.y + j, 0, _Height - 1));
+            neighborStrong = max(neighborStrong, _EdgeIn.Load(int3(q, 0)));
+        }
+    }
+    // remove self-contribution (center) effect is negligible since initial _EdgeIn is zeros for first pass
+    float weakKeep = step(0.5, neighborStrong);
+    _EdgeOut[p] = saturate(strong + weak * weakKeep);
+}
+
+

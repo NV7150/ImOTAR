@@ -2306,10 +2306,8 @@ MonoBehaviour:
   scheduler: {fileID: 614587372}
   lowResDepthMeters: {fileID: 8400000, guid: d5dae7e4603d4450d93aeb424dc4c4d0, type: 2}
   transformedMask: {fileID: 8400000, guid: 5f0cf0a0c21424e18bad1893ef5d22e5, type: 2}
-  se3BackwarpMaterial: {fileID: 2100000, guid: 2b1b467110f6f4fd3b045670d871d022, type: 2}
+  se3BackwarpMaterial: {fileID: 2100000, guid: 2bf6bb2b06d314bb684256cf9424ec2f, type: 2}
   _arCameraManager: {fileID: 1461364221}
-  useNearestSampling: 0
-  maxUvDispNormalized: 0.25
   useYaw: 1
   usePitch: 1
   useRoll: 1
@@ -2533,8 +2531,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1956616879}
-  - component: {fileID: 1956616880}
   - component: {fileID: 1956616881}
+  - component: {fileID: 1956616882}
   m_Layer: 0
   m_Name: Refiner
   m_TagString: Untagged
@@ -2557,28 +2555,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1608248577}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1956616880
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1956616878}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 27edf48780dff4b068a24c7c71674f42, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  regionProvider: {fileID: 768450261}
-  depthTexture: {fileID: 8400000, guid: 1af950b8453484718ade586c67233303, type: 2}
-  shader: {fileID: 7200000, guid: 69cf44e7634e84717add716adab0a4f5, type: 3}
-  zeroRegionMode: 2
-  output: {fileID: 8400000, guid: 4093feb22a24d474f8c89aad7441ac8f, type: 2}
-  debugLogStats: 0
-  debugLogCount: 8
-  useEMA: 1
-  alphaInner: 0.5
-  alphaBoundary: 0.9
 --- !u!114 &1956616881
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2591,8 +2567,36 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 85811d02fc894468ebc34a8d31e47124, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  refiner: {fileID: 1956616880}
+  refiner: {fileID: 1956616882}
   baseProvider: {fileID: 2071347183}
+--- !u!114 &1956616882
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1956616878}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f05f5a4da51f43aeb00ad8b548281f3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  regionProvider: {fileID: 768450261}
+  depthTexture: {fileID: 8400000, guid: 1af950b8453484718ade586c67233303, type: 2}
+  shader: {fileID: 7200000, guid: 41174baa64cdd46a59e23b0e5a3a48ba, type: 3}
+  zeroRegionMode: 2
+  coreDepthMode: 1
+  histogramBins: 256
+  ringRin: 0.25
+  ringRout: 0.75
+  minHalfSamples: 16
+  insufficientMode: 0
+  useEMA: 1
+  alphaInner: 0.5
+  alphaBoundary: 0.9
+  output: {fileID: 8400000, guid: 4093feb22a24d474f8c89aad7441ac8f, type: 2}
+  debugLogStats: 1
+  debugLogCount: 8
 --- !u!1 &1964602097
 GameObject:
   m_ObjectHideFlags: 0

@@ -1,0 +1,75 @@
+#pragma kernel CSMain
+
+// Sobel edge magnitude on luma. Input: _SourceTex (RGBA, 0..1). Output: _EdgeTex (R, 0..1)
+// GPU-friendly: integer texel fetch with clamp, no dynamic branches per neighbor.
+
+Texture2D<float4> _SourceTex;
+RWTexture2D<float> _EdgeTex;
+
+int _Width;
+int _Height;
+float _Gain;          // Scales magnitude before saturate (default 1.0)
+float3 _LumaWeights;  // e.g., (0.299, 0.587, 0.114)
+
+int2 ClampCoord(int2 q)
+{
+    q.x = clamp(q.x, 0, _Width - 1);
+    q.y = clamp(q.y, 0, _Height - 1);
+    return q;
+}
+
+float LumaAt(int2 q)
+{
+    float3 rgb = _SourceTex.Load(int3(q, 0)).xyz;
+    return dot(rgb, _LumaWeights);
+}
+
+[numthreads(16, 16, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_Width || id.y >= (uint)_Height) return;
+
+    int2 p = int2(id.xy);
+
+    // 3x3 Sobel kernels
+    // Gx:
+    // [-1  0  1]
+    // [-2  0  2]
+    // [-1  0  1]
+    // Gy:
+    // [-1 -2 -1]
+    // [ 0  0  0]
+    // [ 1  2  1]
+
+    int2 p00 = ClampCoord(p + int2(-1, -1));
+    int2 p10 = ClampCoord(p + int2( 0, -1));
+    int2 p20 = ClampCoord(p + int2( 1, -1));
+    int2 p01 = ClampCoord(p + int2(-1,  0));
+    int2 p21 = ClampCoord(p + int2( 1,  0));
+    int2 p02 = ClampCoord(p + int2(-1,  1));
+    int2 p12 = ClampCoord(p + int2( 0,  1));
+    int2 p22 = ClampCoord(p + int2( 1,  1));
+
+    float l00 = LumaAt(p00);
+    float l10 = LumaAt(p10);
+    float l20 = LumaAt(p20);
+    float l01 = LumaAt(p01);
+    float l21 = LumaAt(p21);
+    float l02 = LumaAt(p02);
+    float l12 = LumaAt(p12);
+    float l22 = LumaAt(p22);
+
+    float gx = (-1.0 * l00) + ( 1.0 * l20)
+             + (-2.0 * l01) + ( 2.0 * l21)
+             + (-1.0 * l02) + ( 1.0 * l22);
+
+    float gy = (-1.0 * l00) + (-2.0 * l10) + (-1.0 * l20)
+             + ( 1.0 * l02) + ( 2.0 * l12) + ( 1.0 * l22);
+
+    float mag = sqrt(gx * gx + gy * gy);
+    float edge = saturate(mag * _Gain);
+
+    _EdgeTex[p] = edge;
+}
+
+

@@ -1,0 +1,563 @@
+#pragma kernel ResetStats
+#pragma kernel ResetGeom
+#pragma kernel ClearHist
+#pragma kernel Pass1_Stats
+#pragma kernel Pass2_ScaleCenter
+#pragma kernel Pass3_AccumulateMean
+#pragma kernel Pass3_AccumulateMedian
+#pragma kernel PassH_Median
+#pragma kernel Pass4_Write
+
+// 2D thread group size for image-sized passes
+[numthreads(16, 16, 1)]
+void Pass1_Stats(uint3 id : SV_DispatchThreadID);
+[numthreads(16, 16, 1)]
+void Pass3_AccumulateMean(uint3 id : SV_DispatchThreadID);
+[numthreads(16, 16, 1)]
+void Pass3_AccumulateMedian(uint3 id : SV_DispatchThreadID);
+[numthreads(16, 16, 1)]
+void Pass4_Write(uint3 id : SV_DispatchThreadID);
+
+// 1D thread group size for region-indexed passes
+[numthreads(256, 1, 1)]
+void ResetStats(uint3 id : SV_DispatchThreadID);
+[numthreads(256, 1, 1)]
+void ResetGeom(uint3 id : SV_DispatchThreadID);
+[numthreads(256, 1, 1)]
+void ClearHist(uint3 id : SV_DispatchThreadID);
+[numthreads(256, 1, 1)]
+void Pass2_ScaleCenter(uint3 id : SV_DispatchThreadID);
+[numthreads(256, 1, 1)]
+void PassH_Median(uint3 id : SV_DispatchThreadID);
+
+// Resources
+Texture2D<float>   _DepthTex;
+Texture2D<float4>  _RegionTex;
+Texture2D<float>   _PrevOutput; // previous smoothed output (RFloat)
+RWTexture2D<float> _Output; // RFloat
+
+struct RegionStats {
+    uint count;
+    uint maxDepthMm;
+    uint minDepthMm;
+    uint sumScaledAll;
+    uint sumX;
+    uint sumY;
+    uint minX;
+    uint maxX;
+    uint minY;
+    uint maxY;
+};
+
+struct RegionHalves {
+    uint countL;
+    uint countR;
+    uint countT;
+    uint countB;
+    uint sumL;
+    uint sumR;
+    uint sumT;
+    uint sumB;
+};
+
+// Packed: x=u0, y=v0, z=hx, w=hy
+RWStructuredBuffer<float4> _Center;
+
+// Packed: x=scale (uint), y=coreZmm (uint)
+RWStructuredBuffer<uint2> _ScaleCore;
+
+RWStructuredBuffer<RegionStats> _Stats;
+RWStructuredBuffer<RegionHalves> _Halves;
+
+// median histogram
+RWStructuredBuffer<uint>  _Hist;      // size: _NumRegions * _Bins
+
+// Params
+cbuffer Params {
+    uint2 _RegionSize; // (w, h)
+    uint2 _DepthSize;  // (w, h)
+    uint  _NumRegions; // maxId + 1
+    int   _ZeroRegionMode; // 0:-1, 1:0, 2:treat as region, 3:passthrough
+    int   _UseEMA; // 0/1
+    int   _PrevValid; // 0/1
+    float _AlphaInner; // 0..1
+    float _AlphaBoundary; // 0..1
+
+    int   _CoreDepthMode; // 0:Mean, 1:Median
+    int   _Bins; // histogram bins
+
+    float _RingRin;  // inner radius (0..1)
+    float _RingRout; // outer radius (0..1)
+
+    uint  _MinHalfSamples; // threshold for halves sufficiency
+    int   _InsufficientMode; // 0:-1, 1:fill core
+}
+
+// Helpers
+static const uint UINT_MAX_SAFE = 0xFFFFFFEF; // margin to avoid exact overflow
+
+uint DecodeRegionId(float4 c01)
+{
+    uint4 p = (uint4)round(saturate(c01) * 255.0);
+    return p.x | (p.y << 8) | (p.z << 16) | (p.w << 24);
+}
+
+int2 MapRegionToDepth(uint2 rp)
+{
+    float2 rsz = float2(_RegionSize);
+    float2 dsz = float2(_DepthSize);
+    float2 fc = (float2(rp) + 0.5) * dsz / rsz;
+    int2 dp = int2(floor(fc));
+    dp.x = clamp(dp.x, 0, int(_DepthSize.x) - 1);
+    dp.y = clamp(dp.y, 0, int(_DepthSize.y) - 1);
+    return dp;
+}
+
+bool IsDepthValid(float d)
+{
+    return (d > 0.0) && (d == d) && isfinite(d);
+}
+
+uint SampleRegionIdClampedInt2(int2 p)
+{
+    p.x = clamp(p.x, 0, int(_RegionSize.x) - 1);
+    p.y = clamp(p.y, 0, int(_RegionSize.y) - 1);
+    return DecodeRegionId(_RegionTex.Load(int3(uint2(p), 0)));
+}
+
+uint ModeLabel3x3(uint2 rp)
+{
+    int2 p = int2(rp);
+    uint l00 = SampleRegionIdClampedInt2(p + int2(-1, -1));
+    uint l10 = SampleRegionIdClampedInt2(p + int2( 0, -1));
+    uint l20 = SampleRegionIdClampedInt2(p + int2( 1, -1));
+    uint l01 = SampleRegionIdClampedInt2(p + int2(-1,  0));
+    uint l11 = SampleRegionIdClampedInt2(p + int2( 0,  0));
+    uint l21 = SampleRegionIdClampedInt2(p + int2( 1,  0));
+    uint l02 = SampleRegionIdClampedInt2(p + int2(-1,  1));
+    uint l12 = SampleRegionIdClampedInt2(p + int2( 0,  1));
+    uint l22 = SampleRegionIdClampedInt2(p + int2( 1,  1));
+
+    uint c00 = (l00==l00?1u:0u)+(l00==l10?1u:0u)+(l00==l20?1u:0u)+(l00==l01?1u:0u)+(l00==l11?1u:0u)+(l00==l21?1u:0u)+(l00==l02?1u:0u)+(l00==l12?1u:0u)+(l00==l22?1u:0u);
+    uint c10 = (l10==l00?1u:0u)+(l10==l10?1u:0u)+(l10==l20?1u:0u)+(l10==l01?1u:0u)+(l10==l11?1u:0u)+(l10==l21?1u:0u)+(l10==l02?1u:0u)+(l10==l12?1u:0u)+(l10==l22?1u:0u);
+    uint c20 = (l20==l00?1u:0u)+(l20==l10?1u:0u)+(l20==l20?1u:0u)+(l20==l01?1u:0u)+(l20==l11?1u:0u)+(l20==l21?1u:0u)+(l20==l02?1u:0u)+(l20==l12?1u:0u)+(l20==l22?1u:0u);
+    uint c01 = (l01==l00?1u:0u)+(l01==l10?1u:0u)+(l01==l20?1u:0u)+(l01==l01?1u:0u)+(l01==l11?1u:0u)+(l01==l21?1u:0u)+(l01==l02?1u:0u)+(l01==l12?1u:0u)+(l01==l22?1u:0u);
+    uint c11 = (l11==l00?1u:0u)+(l11==l10?1u:0u)+(l11==l20?1u:0u)+(l11==l01?1u:0u)+(l11==l11?1u:0u)+(l11==l21?1u:0u)+(l11==l02?1u:0u)+(l11==l12?1u:0u)+(l11==l22?1u:0u);
+    uint c21 = (l21==l00?1u:0u)+(l21==l10?1u:0u)+(l21==l20?1u:0u)+(l21==l01?1u:0u)+(l21==l11?1u:0u)+(l21==l21?1u:0u)+(l21==l02?1u:0u)+(l21==l12?1u:0u)+(l21==l22?1u:0u);
+    uint c02 = (l02==l00?1u:0u)+(l02==l10?1u:0u)+(l02==l20?1u:0u)+(l02==l01?1u:0u)+(l02==l11?1u:0u)+(l02==l21?1u:0u)+(l02==l02?1u:0u)+(l02==l12?1u:0u)+(l02==l22?1u:0u);
+    uint c12 = (l12==l00?1u:0u)+(l12==l10?1u:0u)+(l12==l20?1u:0u)+(l12==l01?1u:0u)+(l12==l11?1u:0u)+(l12==l21?1u:0u)+(l12==l02?1u:0u)+(l12==l12?1u:0u)+(l12==l22?1u:0u);
+    uint c22 = (l22==l00?1u:0u)+(l22==l10?1u:0u)+(l22==l20?1u:0u)+(l22==l01?1u:0u)+(l22==l11?1u:0u)+(l22==l21?1u:0u)+(l22==l02?1u:0u)+(l22==l12?1u:0u)+(l22==l22?1u:0u);
+
+    uint bestLabel = l11;
+    uint bestCount = c11;
+    {
+        float gt = step((float)bestCount + 0.5, (float)c00);
+        bestCount = (uint)lerp((float)bestCount, (float)c00, gt);
+        bestLabel = (uint)lerp((float)bestLabel, (float)l00, gt);
+    }
+    {
+        float gt = step((float)bestCount + 0.5, (float)c10);
+        bestCount = (uint)lerp((float)bestCount, (float)c10, gt);
+        bestLabel = (uint)lerp((float)bestLabel, (float)l10, gt);
+    }
+    {
+        float gt = step((float)bestCount + 0.5, (float)c20);
+        bestCount = (uint)lerp((float)bestCount, (float)c20, gt);
+        bestLabel = (uint)lerp((float)bestLabel, (float)l20, gt);
+    }
+    {
+        float gt = step((float)bestCount + 0.5, (float)c01);
+        bestCount = (uint)lerp((float)bestCount, (float)c01, gt);
+        bestLabel = (uint)lerp((float)bestLabel, (float)l01, gt);
+    }
+    {
+    }
+    {
+        float gt = step((float)bestCount + 0.5, (float)c21);
+        bestCount = (uint)lerp((float)bestCount, (float)c21, gt);
+        bestLabel = (uint)lerp((float)bestLabel, (float)l21, gt);
+    }
+    {
+        float gt = step((float)bestCount + 0.5, (float)c02);
+        bestCount = (uint)lerp((float)bestCount, (float)c02, gt);
+        bestLabel = (uint)lerp((float)bestLabel, (float)l02, gt);
+    }
+    {
+        float gt = step((float)bestCount + 0.5, (float)c12);
+        bestCount = (uint)lerp((float)bestCount, (float)c12, gt);
+        bestLabel = (uint)lerp((float)bestLabel, (float)l12, gt);
+    }
+    {
+        float gt = step((float)bestCount + 0.5, (float)c22);
+        bestCount = (uint)lerp((float)bestCount, (float)c22, gt);
+        bestLabel = (uint)lerp((float)bestLabel, (float)l22, gt);
+    }
+    return bestLabel;
+}
+
+float ComputeBoundaryAlpha(uint2 rp, uint ridCenter)
+{
+    int2 p = int2(rp);
+    uint ridR = SampleRegionIdClampedInt2(p + int2(1, 0));
+    uint ridD = SampleRegionIdClampedInt2(p + int2(0, 1));
+    float nb = 0.0;
+    nb += (ridCenter != ridR) ? 1.0 : 0.0;
+    nb += (ridCenter != ridD) ? 1.0 : 0.0;
+    float isBoundary = step(0.5, nb);
+    return lerp(_AlphaInner, _AlphaBoundary, isBoundary);
+}
+
+// -------------------- Kernels --------------------
+
+void ResetStats(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= _NumRegions) return;
+    RegionStats s;
+    s.count = 0u;
+    s.maxDepthMm = 0u;
+    s.minDepthMm = 0xFFFFFFFFu;
+    s.sumScaledAll = 0u;
+    s.sumX = 0u; s.sumY = 0u;
+    s.minX = 0xFFFFFFFFu; s.maxX = 0u;
+    s.minY = 0xFFFFFFFFu; s.maxY = 0u;
+    _Stats[idx] = s;
+}
+
+void ResetGeom(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= _NumRegions) return;
+    RegionHalves h;
+    h.countL = 0u; h.countR = 0u; h.countT = 0u; h.countB = 0u;
+    h.sumL = 0u; h.sumR = 0u; h.sumT = 0u; h.sumB = 0u;
+    _Halves[idx] = h;
+    _Center[idx] = float4(0.5, 0.5, 0.5, 0.5);
+    _ScaleCore[idx] = uint2(0u, 0u);
+}
+
+void Pass1_Stats(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _RegionSize.x || id.y >= _RegionSize.y) return;
+
+    uint2 rp = id.xy;
+    int2 dp = MapRegionToDepth(rp);
+
+    float depth = _DepthTex.Load(int3(dp, 0));
+    uint  rid   = ModeLabel3x3(rp);
+
+    uint m_depth = IsDepthValid(depth) ? 1u : 0u;
+    uint m_zero  = (_ZeroRegionMode == 2) ? 1u : 0u;
+    uint m_rid   = (rid != 0u) ? 1u : 0u;
+    uint m_use   = (m_rid | m_zero) & m_depth;
+
+    float dmmF = clamp(depth * 1000.0, 0.0, 4.294e9);
+    uint  dmm  = (uint)round(dmmF);
+
+    uint add = m_use;
+    InterlockedAdd(_Stats[rid].count, add);
+    InterlockedMax(_Stats[rid].maxDepthMm, dmm * m_use);
+
+    // min depth
+    uint minCand = (m_use != 0u) ? dmm : 0xFFFFFFFFu;
+    InterlockedMin(_Stats[rid].minDepthMm, minCand);
+
+    // centroid and extents (region pixel space)
+    uint rx = rp.x;
+    uint ry = rp.y;
+    InterlockedAdd(_Stats[rid].sumX, rx * add);
+    InterlockedAdd(_Stats[rid].sumY, ry * add);
+    uint minXCand = (add != 0u) ? rx : 0xFFFFFFFFu;
+    uint minYCand = (add != 0u) ? ry : 0xFFFFFFFFu;
+    InterlockedMin(_Stats[rid].minX, minXCand);
+    InterlockedMin(_Stats[rid].minY, minYCand);
+    InterlockedMax(_Stats[rid].maxX, rx * add);
+    InterlockedMax(_Stats[rid].maxY, ry * add);
+}
+
+void Pass2_ScaleCenter(uint3 id : SV_DispatchThreadID)
+{
+    uint rid = id.x;
+    if (rid >= _NumRegions) return;
+
+    uint cnt   = _Stats[rid].count;
+    uint maxMm = _Stats[rid].maxDepthMm;
+
+    float denom = max(1e-6, (float)cnt * (float)maxMm * (1.0 / 1000.0));
+    float s = floor((float)UINT_MAX_SAFE / denom);
+    s = clamp(s, 1.0, 1.0e9);
+    float cntMask = (cnt  > 0u) ? 1.0 : 0.0;
+    float maxMask = (maxMm > 0u) ? 1.0 : 0.0;
+    float useMask = cntMask * maxMask;
+    uint scale = (uint)max(1.0, s * useMask);
+    uint2 sc = _ScaleCore[rid];
+    sc.x = scale;
+    _ScaleCore[rid] = sc;
+
+    // center (u0,v0) and half-extents (hx,hy) in normalized [0,1]
+    float rw = (float)_RegionSize.x;
+    float rh = (float)_RegionSize.y;
+
+    float sumX = (float)_Stats[rid].sumX;
+    float sumY = (float)_Stats[rid].sumY;
+    float cx = (cnt > 0u) ? (sumX / max(1.0, (float)cnt)) : 0.5 * (rw - 1.0);
+    float cy = (cnt > 0u) ? (sumY / max(1.0, (float)cnt)) : 0.5 * (rh - 1.0);
+    float u0 = (cx + 0.5) / max(1.0, rw);
+    float v0 = (cy + 0.5) / max(1.0, rh);
+
+    float minX = (_Stats[rid].minX == 0xFFFFFFFFu) ? 0.0 : (float)_Stats[rid].minX;
+    float maxX = (float)_Stats[rid].maxX;
+    float minY = (_Stats[rid].minY == 0xFFFFFFFFu) ? 0.0 : (float)_Stats[rid].minY;
+    float maxY = (float)_Stats[rid].maxY;
+    float hx = max(1.0, (maxX - minX)) / (2.0 * max(1.0, rw));
+    float hy = max(1.0, (maxY - minY)) / (2.0 * max(1.0, rh));
+    _Center[rid] = float4(u0, v0, hx, hy);
+}
+
+void Pass3_AccumulateMean(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _RegionSize.x || id.y >= _RegionSize.y) return;
+
+    uint2 rp = id.xy;
+    int2 dp = MapRegionToDepth(rp);
+
+    float depth = _DepthTex.Load(int3(dp, 0));
+    uint  rid   = ModeLabel3x3(rp);
+
+    uint m_depth = IsDepthValid(depth) ? 1u : 0u;
+    uint m_zero  = (_ZeroRegionMode == 2) ? 1u : 0u;
+    uint m_rid   = (rid != 0u) ? 1u : 0u;
+    uint m_use   = (m_rid | m_zero) & m_depth;
+
+    uint scale = max(_ScaleCore[rid].x, 1u);
+    float scaledF = clamp(depth * (float)scale, 0.0, 4.294e9);
+    uint  scaled  = (uint)round(scaledF);
+
+    // accumulate for mean core depth (all used)
+    InterlockedAdd(_Stats[rid].sumScaledAll, scaled * m_use);
+
+    // Mean variant: no histogram writes here
+
+    // ring selection (Chebyshev / L∞)
+    float u = (float(rp.x) + 0.5) / max(1.0, (float)_RegionSize.x);
+    float v = (float(rp.y) + 0.5) / max(1.0, (float)_RegionSize.y);
+    float4 c = _Center[rid];
+    float u0 = c.x;
+    float v0 = c.y;
+    float hx = max(c.z, 1.0 / max(1.0, (float)_RegionSize.x));
+    float hy = max(c.w, 1.0 / max(1.0, (float)_RegionSize.y));
+    float ru = abs(u - u0) / hx;
+    float rv = abs(v - v0) / hy;
+    float r = max(ru, rv);
+    float inRing = step(_RingRin, r) * step(r, _RingRout);
+    uint m_ring = (uint)round(saturate(inRing));
+
+    uint m_apply = m_use * m_ring;
+
+    // halves by sign around centroid
+    float sx = step(0.0, u - u0); // 1: Right, 0: Left
+    float sy = step(0.0, v - v0); // 1: Bottom, 0: Top (note: UV origin at top-left in screen space handling is already consistent with region/depth mapping here)
+    uint toR = (uint)round(sx);
+    uint toL = 1u - toR;
+    uint toB = (uint)round(sy);
+    uint toT = 1u - toB;
+
+    InterlockedAdd(_Halves[rid].countL, m_apply * toL);
+    InterlockedAdd(_Halves[rid].countR, m_apply * toR);
+    InterlockedAdd(_Halves[rid].countT, m_apply * toT);
+    InterlockedAdd(_Halves[rid].countB, m_apply * toB);
+
+    InterlockedAdd(_Halves[rid].sumL, scaled * (m_apply * toL));
+    InterlockedAdd(_Halves[rid].sumR, scaled * (m_apply * toR));
+    InterlockedAdd(_Halves[rid].sumT, scaled * (m_apply * toT));
+    InterlockedAdd(_Halves[rid].sumB, scaled * (m_apply * toB));
+}
+
+void Pass3_AccumulateMedian(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _RegionSize.x || id.y >= _RegionSize.y) return;
+
+    uint2 rp = id.xy;
+    int2 dp = MapRegionToDepth(rp);
+
+    float depth = _DepthTex.Load(int3(dp, 0));
+    uint  rid   = ModeLabel3x3(rp);
+
+    uint m_depth = IsDepthValid(depth) ? 1u : 0u;
+    uint m_zero  = (_ZeroRegionMode == 2) ? 1u : 0u;
+    uint m_rid   = (rid != 0u) ? 1u : 0u;
+    uint m_use   = (m_rid | m_zero) & m_depth;
+
+    uint scale = max(_ScaleCore[rid].x, 1u);
+    float scaledF = clamp(depth * (float)scale, 0.0, 4.294e9);
+    uint  scaled  = (uint)round(scaledF);
+
+    InterlockedAdd(_Stats[rid].sumScaledAll, scaled * m_use);
+
+    // Histogram
+    uint minMm = _Stats[rid].minDepthMm;
+    uint maxMm = _Stats[rid].maxDepthMm;
+    float dmm = clamp(depth * 1000.0, 0.0, 4.294e9);
+    uint dmmU = (uint)round(dmm);
+    float range = max(1.0, (float)(maxMm - minMm) + 1.0);
+    float binF = ((float)max(0, (int)dmmU - (int)minMm)) * (float)_Bins / range;
+    uint bin = (uint)floor(binF);
+    bin = clamp(bin, 0u, (uint)(_Bins - 1));
+    uint histIndex = rid * (uint)_Bins + bin;
+    InterlockedAdd(_Hist[histIndex], m_use);
+
+    // ring selection (Chebyshev / L∞) and halves
+    float u = (float(rp.x) + 0.5) / max(1.0, (float)_RegionSize.x);
+    float v = (float(rp.y) + 0.5) / max(1.0, (float)_RegionSize.y);
+    float4 c = _Center[rid];
+    float u0 = c.x; float v0 = c.y; float hx = max(c.z, 1.0 / max(1.0, (float)_RegionSize.x)); float hy = max(c.w, 1.0 / max(1.0, (float)_RegionSize.y));
+    float ru = abs(u - u0) / hx;
+    float rv = abs(v - v0) / hy;
+    float r = max(ru, rv);
+    float inRing = step(_RingRin, r) * step(r, _RingRout);
+    uint m_ring = (uint)round(saturate(inRing));
+    uint m_apply = m_use * m_ring;
+    float sx = step(0.0, u - u0);
+    float sy = step(0.0, v - v0);
+    uint toR = (uint)round(sx);
+    uint toL = 1u - toR;
+    uint toB = (uint)round(sy);
+    uint toT = 1u - toB;
+    InterlockedAdd(_Halves[rid].countL, m_apply * toL);
+    InterlockedAdd(_Halves[rid].countR, m_apply * toR);
+    InterlockedAdd(_Halves[rid].countT, m_apply * toT);
+    InterlockedAdd(_Halves[rid].countB, m_apply * toB);
+    InterlockedAdd(_Halves[rid].sumL, scaled * (m_apply * toL));
+    InterlockedAdd(_Halves[rid].sumR, scaled * (m_apply * toR));
+    InterlockedAdd(_Halves[rid].sumT, scaled * (m_apply * toT));
+    InterlockedAdd(_Halves[rid].sumB, scaled * (m_apply * toB));
+}
+
+void PassH_Median(uint3 id : SV_DispatchThreadID)
+{
+    uint rid = id.x;
+    if (rid >= _NumRegions) return;
+    if (_CoreDepthMode != 1) return;
+
+    uint cnt = _Stats[rid].count;
+    if (cnt == 0u) { uint2 sc0 = _ScaleCore[rid]; sc0.y = 0u; _ScaleCore[rid] = sc0; return; }
+
+    uint minMm = _Stats[rid].minDepthMm;
+    uint maxMm = _Stats[rid].maxDepthMm;
+    uint target = cnt / 2u;
+    uint acc = 0u;
+    uint bins = (uint)_Bins;
+    uint idx = 0u;
+    [loop]
+    for (uint i = 0u; i < bins; ++i) {
+        uint h = _Hist[rid * bins + i];
+        acc += h;
+        if (acc >= target) { idx = i; break; }
+    }
+    float range = max(1.0, (float)(maxMm - minMm) + 1.0);
+    float binWidth = range / max(1.0, (float)bins);
+    float centerMm = (float)minMm + (float(idx) + 0.5) * binWidth;
+    uint outMm = (uint)clamp(centerMm, 0.0, 4.294e9);
+    uint2 sc = _ScaleCore[rid];
+    sc.y = outMm;
+    _ScaleCore[rid] = sc;
+}
+
+void ClearHist(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    uint total = _NumRegions * (uint)_Bins;
+    if (idx >= total) return;
+    _Hist[idx] = 0u;
+}
+
+void Pass4_Write(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _RegionSize.x || id.y >= _RegionSize.y) return;
+
+    uint2 rp = id.xy;
+    int2 dp  = MapRegionToDepth(rp);
+
+    float depth = _DepthTex.Load(int3(dp, 0));
+    uint  rid   = ModeLabel3x3(rp);
+
+    uint  cnt   = _Stats[rid].count;
+    uint  scale = max(_ScaleCore[rid].x, 1u);
+    uint  sumAll = _Stats[rid].sumScaledAll;
+
+    float cntMask = (cnt > 0u) ? 1.0 : 0.0;
+    float denomAll = max(1.0, (float)cnt * (float)scale);
+    float meanCandidate = (float)sumAll / denomAll;
+    float coreMean = lerp(-1.0, meanCandidate, cntMask);
+
+    float z_core = coreMean;
+    if (_CoreDepthMode == 1) {
+        float coreMm = (float)_ScaleCore[rid].y;
+        z_core = coreMm * (1.0 / 1000.0);
+    }
+
+    // gradients from halves
+    RegionHalves h = _Halves[rid];
+    uint cntL = h.countL;
+    uint cntR = h.countR;
+    uint cntT = h.countT;
+    uint cntB = h.countB;
+    uint sumL = h.sumL;
+    uint sumR = h.sumR;
+    uint sumT = h.sumT;
+    uint sumB = h.sumB;
+
+    float meanL = (float)sumL / max(1.0, (float)cntL * (float)scale);
+    float meanR = (float)sumR / max(1.0, (float)cntR * (float)scale);
+    float meanT = (float)sumT / max(1.0, (float)cntT * (float)scale);
+    float meanB = (float)sumB / max(1.0, (float)cntB * (float)scale);
+
+    float4 cNorm = _Center[rid];
+    float hx = max(cNorm.z, 1.0 / max(1.0, (float)_RegionSize.x));
+    float hy = max(cNorm.w, 1.0 / max(1.0, (float)_RegionSize.y));
+    float gx = (meanR - meanL) / max(1e-6, 2.0 * hx);
+    float gy = (meanB - meanT) / max(1e-6, 2.0 * hy);
+
+    // insufficient halves detection
+    float okX = step((float)_MinHalfSamples, (float)min(cntL, cntR));
+    float okY = step((float)_MinHalfSamples, (float)min(cntT, cntB));
+    float okBoth = okX * okY;
+    float insuf = 1.0 - okBoth;
+
+    float u = (float(rp.x) + 0.5) / max(1.0, (float)_RegionSize.x);
+    float v = (float(rp.y) + 0.5) / max(1.0, (float)_RegionSize.y);
+    float4 c = _Center[rid]; float u0 = c.x; float v0 = c.y;
+    float z_plane = z_core + gx * (u - u0) + gy * (v - v0);
+
+    // insufficient fallback selection: 0 -> -1, 1 -> fill core
+    float m0 = (_InsufficientMode == 0) ? 1.0 : 0.0;
+    float m1 = (_InsufficientMode == 1) ? 1.0 : 0.0;
+    float fallbackVal = (-1.0) * m0 + z_core * m1;
+    float outVal = lerp(z_plane, fallbackVal, insuf);
+
+    // Zero-region mode selection (rid==0)
+    float isZeroF = (rid == 0u) ? 1.0 : 0.0;
+    float modeF = (float)_ZeroRegionMode;
+    float z_minus1 = -1.0;
+    float z_zero = 0.0;
+    float z_region = outVal;
+    float z_passthrough = depth;
+    float mz0 = (modeF == 0.0) ? 1.0 : 0.0;
+    float mz1 = (modeF == 1.0) ? 1.0 : 0.0;
+    float mz2 = (modeF == 2.0) ? 1.0 : 0.0;
+    float mz3 = (modeF == 3.0) ? 1.0 : 0.0;
+    float zeroOut = z_minus1 * mz0 + z_zero * mz1 + z_region * mz2 + z_passthrough * mz3;
+    outVal = lerp(outVal, zeroOut, isZeroF);
+
+    // EMA temporal smoothing
+    float alpha = ComputeBoundaryAlpha(rp, rid);
+    float prevVal = _PrevOutput[rp];
+    float useEma = (_UseEMA != 0) ? 1.0 : 0.0;
+    float prevOk = (_PrevValid != 0) ? 1.0 : 0.0;
+    float emaVal = lerp(prevVal, outVal, alpha);
+    outVal = lerp(outVal, emaVal, useEma * prevOk);
+
+    _Output[rp] = outVal;
+}
+
+
