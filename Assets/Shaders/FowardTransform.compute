@@ -41,6 +41,14 @@ float3x3 Kinv_from_norm()
                     0.0,     0.0,      1.0);
 }
 
+// Depth tolerance (shader constants)
+static const float EPS_ABS = 5e-3;  // meters
+static const float EPS_REL = 1e-3;  // relative scale
+
+// Splat controls
+int _DoSplat;       // 0: off (center only), 1: 2x2 neighbors
+float _RoundOffset; // shift before floor; 0=floor, 0.5=round-to-nearest
+
 uint floatToOrderedUint(float z)
 {
     // Assumes z is positive; for positive floats, bit pattern is monotonic
@@ -93,13 +101,28 @@ void KMinDepth(uint3 id : SV_DispatchThreadID)
     float2 uv_t = x_t.xy / max(x_t.z, 1e-6);
     if (uv_t.x < 0.0 || uv_t.x > 1.0 || uv_t.y < 0.0 || uv_t.y > 1.0) return;
 
-    int2 pd = int2(uv_t * float2(_DstWidth, _DstHeight));
-    pd = clampToDst(pd);
+    // Base integer pixel (apply rounding offset, then floor)
+    float2 pFloat = uv_t * float2(_DstWidth, _DstHeight) - _RoundOffset;
+    int2 p0 = clampToDst((int2)floor(pFloat));
+
+    // Branchless 2x2 offsets (collapse to center when _DoSplat == 0)
+    int s = _DoSplat; // 0 or 1
+    int2 o0 = int2(0, 0);
+    int2 o1 = int2(s, 0);
+    int2 o2 = int2(0, s);
+    int2 o3 = int2(s, s);
+
+    int2 q0 = clampToDst(p0 + o0);
+    int2 q1 = clampToDst(p0 + o1);
+    int2 q2 = clampToDst(p0 + o2);
+    int2 q3 = clampToDst(p0 + o3);
 
     uint zBits = floatToOrderedUint(P_t.z);
-    int idx = linearIndex(pd);
     uint oldVal;
-    InterlockedMin(_ZBuf[idx], zBits, oldVal);
+    InterlockedMin(_ZBuf[linearIndex(q0)], zBits, oldVal);
+    InterlockedMin(_ZBuf[linearIndex(q1)], zBits, oldVal);
+    InterlockedMin(_ZBuf[linearIndex(q2)], zBits, oldVal);
+    InterlockedMin(_ZBuf[linearIndex(q3)], zBits, oldVal);
 }
 
 [numthreads(16, 16, 1)]
@@ -130,15 +153,39 @@ void KResolve(uint3 id : SV_DispatchThreadID)
     float2 uv_t = x_t.xy / max(x_t.z, 1e-6);
     if (uv_t.x < 0.0 || uv_t.x > 1.0 || uv_t.y < 0.0 || uv_t.y > 1.0) return;
 
-    int2 pd = int2(uv_t * float2(_DstWidth, _DstHeight));
-    pd = clampToDst(pd);
+    // Base integer pixel (apply rounding offset, then floor)
+    float2 pFloat = uv_t * float2(_DstWidth, _DstHeight) - _RoundOffset;
+    int2 p0 = clampToDst((int2)floor(pFloat));
 
-    uint zBits = floatToOrderedUint(P_t.z);
-    int idx = linearIndex(pd);
-    if (zBits == _ZBuf[idx])
-    {
-        _OutTex[pd] = val;
-    }
+    // Branchless 2x2 offsets (collapse to center when _DoSplat == 0)
+    int s = _DoSplat; // 0 or 1
+    int2 o0 = int2(0, 0);
+    int2 o1 = int2(s, 0);
+    int2 o2 = int2(0, s);
+    int2 o3 = int2(s, s);
+
+    int2 q0 = clampToDst(p0 + o0);
+    int2 q1 = clampToDst(p0 + o1);
+    int2 q2 = clampToDst(p0 + o2);
+    int2 q3 = clampToDst(p0 + o3);
+
+    // Tolerant Z comparison (branchless): abs(z_here - z_min) <= max(EPS_ABS, EPS_REL * z_here)
+    float zHere = P_t.z;
+    float z0 = asfloat(_ZBuf[linearIndex(q0)]);
+    float z1 = asfloat(_ZBuf[linearIndex(q1)]);
+    float z2 = asfloat(_ZBuf[linearIndex(q2)]);
+    float z3 = asfloat(_ZBuf[linearIndex(q3)]);
+
+    float tol = max(EPS_ABS, EPS_REL * zHere);
+    float m0 = step(abs(zHere - z0), tol);
+    float m1 = step(abs(zHere - z1), tol);
+    float m2 = step(abs(zHere - z2), tol);
+    float m3 = step(abs(zHere - z3), tol);
+
+    _OutTex[q0] = lerp(_OutTex[q0], val, m0);
+    _OutTex[q1] = lerp(_OutTex[q1], val, m1);
+    _OutTex[q2] = lerp(_OutTex[q2], val, m2);
+    _OutTex[q3] = lerp(_OutTex[q3], val, m3);
 }
 
 

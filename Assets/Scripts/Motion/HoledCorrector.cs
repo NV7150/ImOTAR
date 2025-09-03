@@ -21,6 +21,10 @@ public class HoledCorrector : AsyncFrameProvider {
     [Header("Compute")] 
     [SerializeField] private ComputeShader fowardTransformCS;   // FowardTransform.compute
 
+    [Header("Splat (Forward Warp)")]
+    [SerializeField] private bool doSplat2x2 = true;          // 2x2 splat to improve coverage
+    [SerializeField, Range(0f, 0.5f)] private float roundOffset = 0.5f; // 0=floor, 0.5=round
+
     [Header("Intrinsics (normalized)")]
     [SerializeField] private ARCameraManager _arCameraManager;  
 
@@ -158,6 +162,8 @@ public class HoledCorrector : AsyncFrameProvider {
         fowardTransformCS.SetInt("_SrcHeight", srcH);
         fowardTransformCS.SetInt("_DstWidth", dstW);
         fowardTransformCS.SetInt("_DstHeight", dstH);
+    fowardTransformCS.SetInt("_DoSplat", doSplat2x2 ? 1 : 0);
+    fowardTransformCS.SetFloat("_RoundOffset", roundOffset);
         fowardTransformCS.SetFloat("_Fx", _fxN);
         fowardTransformCS.SetFloat("_Fy", _fyN);
         fowardTransformCS.SetFloat("_Cx", _cxN);

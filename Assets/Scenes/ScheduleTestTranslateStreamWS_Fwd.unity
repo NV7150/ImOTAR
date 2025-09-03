@@ -2307,6 +2307,8 @@ MonoBehaviour:
   lowResDepthMeters: {fileID: 8400000, guid: d5dae7e4603d4450d93aeb424dc4c4d0, type: 2}
   transformedMask: {fileID: 8400000, guid: 5f0cf0a0c21424e18bad1893ef5d22e5, type: 2}
   fowardTransformCS: {fileID: 7200000, guid: 4bd3b428fb3904a31b9ecc05b98f91bf, type: 3}
+  doSplat2x2: 1
+  roundOffset: 0
   _arCameraManager: {fileID: 1461364221}
   useYaw: 1
   usePitch: 1
