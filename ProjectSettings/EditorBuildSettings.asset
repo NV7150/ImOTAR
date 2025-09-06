@@ -23,9 +23,12 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/ScheduleTestTranslateStreamWS.unity
     guid: a4d72292e33eb48acbf4e0b5d41b35cf
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/ScheduleTestTranslateStreamWS_Fwd.unity
     guid: 69e7a68ea0d54436a8855a6f7692a626
+  - enabled: 1
+    path: Assets/Scenes/ScheduleTestTranslatGuidedFilter_Fwd.unity
+    guid: 9114d35e5f36a4083b7f16844f85737b
   - enabled: 0
     path: Assets/Scenes/ScheduleTestTranslatGrad.unity
     guid: 5af5bfd59cc9d49508e7c693795b6717

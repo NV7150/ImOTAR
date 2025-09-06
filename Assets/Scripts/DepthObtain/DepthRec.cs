@@ -86,25 +86,15 @@ public class DepthRec : FrameProvider
         var depthTex = occlusion.environmentDepthTexture; // null の可能性あり
         if (depthTex == null) return;
 
-        if (cmd == null) cmd = new CommandBuffer { name = "ARKit EnvironmentDepth → RT (immediate blit)" };
-        else cmd.Clear();
+    if (cmd == null) cmd = new CommandBuffer { name = "ARKit EnvironmentDepth → RT (immediate blit)" };
+    else cmd.Clear();
 
-        // 現在の RT を退避（UI等の破壊を避ける）
-        var prevColor = Graphics.activeColorBuffer;
-        var prevDepth = Graphics.activeDepthBuffer;
-
-        // 出力先をセット＆クリア
-        Graphics.SetRenderTarget(targetRT);
-        cmd.ClearRenderTarget(clearDepth: true, clearColor: false, backgroundColor: Color.clear);
-
-        // そのフレーム中に GPU コピー（上下反転マテリアル使用）
-        // depthTex は GPU テクスチャ（外部テクスチャの場合あり）
-        cmd.Blit(depthTex, BuiltinRenderTextureType.CurrentActive, flipMaterial);
-
-        Graphics.ExecuteCommandBuffer(cmd);
-
-        // 元に戻す
-        Graphics.SetRenderTarget(prevColor, prevDepth);
+    // Make the CB self-contained: set target and blit directly to targetRT.
+    cmd.SetRenderTarget(targetRT);
+    cmd.ClearRenderTarget(clearDepth: true, clearColor: false, backgroundColor: Color.clear);
+    // depthTex は GPU テクスチャ（外部テクスチャの場合あり）。明示的に targetRT へ Blit
+    cmd.Blit(depthTex, targetRT, flipMaterial);
+    Graphics.ExecuteCommandBuffer(cmd);
 
         // タイムスタンプを更新してティックアップ
         lastUpdateTime = DateTime.Now;

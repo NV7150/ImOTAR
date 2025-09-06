@@ -13,6 +13,8 @@ public class DepthStich : FrameProvider
     [Header("Output")]
     [SerializeField] private RenderTexture output;   // RFloat
 
+    [SerializeField] private bool verboseLogs = false;
+
     private DateTime _timestamp;
 
     public override RenderTexture FrameTex => output;
@@ -29,7 +31,9 @@ public class DepthStich : FrameProvider
         srcProvider.OnFrameUpdated -= OnSrcUpdated;
     }
 
-    private void OnSrcUpdated(RenderTexture updatedSrc){
+    private void OnSrcUpdated(RenderTexture updatedSrc) {
+        if (verboseLogs) Debug.Log($"[DepthStich] OnSrcUpdated: {updatedSrc.width}x{updatedSrc.height}, support: {supportProvider?.FrameTex?.width}x{supportProvider?.FrameTex?.height}");
+
         var srcRT = updatedSrc;
         var supRT = supportProvider != null ? supportProvider.FrameTex : null;
         if (srcRT == null || supRT == null) return;
@@ -43,12 +47,15 @@ public class DepthStich : FrameProvider
         stitchMaterial.SetTexture("_Support", supRT);
         Graphics.Blit(null, output, stitchMaterial, 0);
 
-        if (!IsInitTexture){
+        if (!IsInitTexture)
+        {
             OnFrameTexInitialized();
             IsInitTexture = true;
         }
         _timestamp = DateTime.Now;
         TickUp();
+        
+        if (verboseLogs) Debug.Log($"[DepthStich] OnSrcUpdated: output {output.width}x{output.height}");
     }
 
     private void EnsureOutput(int w, int h){

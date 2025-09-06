@@ -62,18 +62,11 @@ public class CameraRec : FrameProvider
 
         if (cmd == null) cmd = new CommandBuffer { name = "AR Camera Background → RT (immediate blit)" };
         else cmd.Clear();
-
-        var prevColor = Graphics.activeColorBuffer;
-        var prevDepth = Graphics.activeDepthBuffer;
-
-        Graphics.SetRenderTarget(targetRT);
-        cmd.ClearRenderTarget(true, false, Color.clear);
-
-        cmd.Blit(src, BuiltinRenderTextureType.CurrentActive, mat);
-
-        Graphics.ExecuteCommandBuffer(cmd);
-
-        Graphics.SetRenderTarget(prevColor, prevDepth);
+    // Make the CB self-contained: set target and blit directly to targetRT.
+    cmd.SetRenderTarget(targetRT);
+    cmd.ClearRenderTarget(clearDepth: true, clearColor: false, backgroundColor: Color.clear);
+    cmd.Blit(src, targetRT, mat);
+    Graphics.ExecuteCommandBuffer(cmd);
         
         // タイムスタンプを更新してティックアップ
         lastUpdateTime = DateTime.Now;

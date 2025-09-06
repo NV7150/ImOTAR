@@ -164,7 +164,7 @@ public class CannyEdgeProvider : FrameProvider
         cannyCompute.SetTexture(_kNms, "_NmsTex", _nmsRT);
         cannyCompute.Dispatch(_kNms, gx, gy, 1);
 
-        // 4) Hysteresis: ping-pong passes
+        // 4) Hysteresis: ping-pong passes (final write prefers direct compute write into edgeTex)
         cannyCompute.SetFloat("_LowThreshold", Mathf.Min(lowThreshold, highThreshold));
         cannyCompute.SetFloat("_HighThreshold", Mathf.Max(lowThreshold, highThreshold));
         RenderTexture readEdge = _edgePing;
@@ -173,7 +173,10 @@ public class CannyEdgeProvider : FrameProvider
         // Seed: clear readEdge to zeros
         ClearRT(readEdge, Color.black);
 
-        for (int pass = 0; pass < Mathf.Max(1, hysteresisPasses); ++pass)
+        int passes = Mathf.Max(1, hysteresisPasses);
+
+        // Run first (passes-1) ping-pong iterations, keeping result in readEdge
+        for (int pass = 0; pass < passes - 1; ++pass)
         {
             cannyCompute.SetTexture(_kHyst, "_NmsIn", _nmsRT);
             cannyCompute.SetTexture(_kHyst, "_EdgeIn", readEdge);
@@ -184,8 +187,26 @@ public class CannyEdgeProvider : FrameProvider
             var tmp = readEdge; readEdge = writeEdge; writeEdge = tmp;
         }
 
-        // Final
-        Graphics.Blit(readEdge, edgeTex);
+        // Final pass: prefer compute write directly into edgeTex (requires UAV)
+        bool canWriteDirect = (edgeTex != null && edgeTex.enableRandomWrite);
+        if (canWriteDirect)
+        {
+            cannyCompute.SetTexture(_kHyst, "_NmsIn", _nmsRT);
+            cannyCompute.SetTexture(_kHyst, "_EdgeIn", readEdge);
+            cannyCompute.SetTexture(_kHyst, "_EdgeOut", edgeTex);
+            cannyCompute.Dispatch(_kHyst, gx, gy, 1);
+        }
+        else
+        {
+            // Fallback: finish into a temp and blit to edgeTex to keep compatibility when edgeTex isn't UAV-capable
+            cannyCompute.SetTexture(_kHyst, "_NmsIn", _nmsRT);
+            cannyCompute.SetTexture(_kHyst, "_EdgeIn", readEdge);
+            cannyCompute.SetTexture(_kHyst, "_EdgeOut", writeEdge);
+            cannyCompute.Dispatch(_kHyst, gx, gy, 1);
+            // swap to make writeEdge the final read
+            readEdge = writeEdge;
+            Graphics.Blit(readEdge, edgeTex);
+        }
     }
 
     private static void ClearRT(RenderTexture rt, Color c)

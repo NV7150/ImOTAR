@@ -1,0 +1,291 @@
+// GuidedFilter.compute
+// Edge-preserving guided filtering for depth. Branchless where reasonable.
+// Mobile-friendly: Metal/Vulkan/ES3.1. Thread group 16x16.
+
+#pragma kernel KResampleGuide
+#pragma kernel KPrepareWeighted
+#pragma kernel KClearRGBA
+#pragma kernel KPrefixRowRGBA
+#pragma kernel KPrefixColRGBA
+#pragma kernel KBoxStats
+#pragma kernel KOutput
+
+// Textures
+Texture2D<float>          _Depth;      // RFloat meters; invalid = _InvalidDepth
+Texture2D<float4>         _GuideSrc;   // original guide (any size)
+Texture2D<float>          _EdgeSrc;    // optional edge (any size)
+RWTexture2D<float4>       _GuideDst;   // resampled to depth resolution (RGB guide or edge in .x)
+Texture2D<float4>         _Guide;      // SRV alias of _GuideDst for read-only passes
+
+// WxH contributions
+RWTexture2D<float4>       _A0; // (m, mI, mP, mII)
+RWTexture2D<float4>       _B0; // (mIP.x, mIP.y, mIP.z, pad)
+RWTexture2D<float4>       _C0; // (pad)
+
+// (W+1)x(H+1) integrals (inclusive prefix with 0 border)
+RWTexture2D<float4>       _AInt;
+RWTexture2D<float4>       _BInt;
+RWTexture2D<float4>       _CInt;
+
+// AB pass
+RWTexture2D<float4>       _AB0;  // (m*a.xyz, m*b, pad)
+RWTexture2D<float4>       _ABInt;
+
+// Output
+RWTexture2D<float>        _OutTex; // RFloat meters
+
+// Params
+int _Width, _Height;
+int _IntWidth, _IntHeight; // W+1, H+1
+int _Radius;
+float _Epsilon;
+float _MinValidWeight;
+float _InvalidDepth;
+float4 _LumaWeights; // xyz
+float _ModeLuma, _ModeRGB, _ModeEdge;
+int _GuideSrcWidth, _GuideSrcHeight;
+int _EdgeSrcWidth, _EdgeSrcHeight;
+
+// Helpers
+float4 Load4(Texture2D<float4> tex, int2 size, int2 p)
+{
+    p.x = clamp(p.x, 0, size.x - 1);
+    p.y = clamp(p.y, 0, size.y - 1);
+    return tex.Load(int3(p, 0));
+}
+
+float Load1(Texture2D<float> tex, int2 size, int2 p)
+{
+    p.x = clamp(p.x, 0, size.x - 1);
+    p.y = clamp(p.y, 0, size.y - 1);
+    return tex.Load(int3(p, 0));
+}
+
+float4 SampleBilinear4(Texture2D<float4> tex, int2 size, float2 uv)
+{
+    float2 pos = uv * (float2)size - 0.5;
+    int2 p0 = (int2)floor(pos);
+    float2 f = frac(pos);
+    int2 p1 = p0 + int2(1, 0);
+    int2 p2 = p0 + int2(0, 1);
+    int2 p3 = p0 + int2(1, 1);
+    float4 c00 = Load4(tex, size, p0);
+    float4 c10 = Load4(tex, size, p1);
+    float4 c01 = Load4(tex, size, p2);
+    float4 c11 = Load4(tex, size, p3);
+    float4 cx0 = lerp(c00, c10, f.x);
+    float4 cx1 = lerp(c01, c11, f.x);
+    return lerp(cx0, cx1, f.y);
+}
+
+float SampleBilinear1(Texture2D<float> tex, int2 size, float2 uv)
+{
+    float2 pos = uv * (float2)size - 0.5;
+    int2 p0 = (int2)floor(pos);
+    float2 f = frac(pos);
+    int2 p1 = p0 + int2(1, 0);
+    int2 p2 = p0 + int2(0, 1);
+    int2 p3 = p0 + int2(1, 1);
+    float c00 = Load1(tex, size, p0);
+    float c10 = Load1(tex, size, p1);
+    float c01 = Load1(tex, size, p2);
+    float c11 = Load1(tex, size, p3);
+    float cx0 = lerp(c00, c10, f.x);
+    float cx1 = lerp(c01, c11, f.x);
+    return lerp(cx0, cx1, f.y);
+}
+
+float3 SampleGuideLumaRGB(float2 uv)
+{
+    if (_ModeEdge > 0.5)
+    {
+        float e = SampleBilinear1(_EdgeSrc, int2(_EdgeSrcWidth, _EdgeSrcHeight), uv);
+        return float3(e, e, e);
+    }
+    float3 rgb = SampleBilinear4(_GuideSrc, int2(_GuideSrcWidth, _GuideSrcHeight), uv).xyz;
+    float y = dot(rgb, _LumaWeights.xyz);
+    // _ModeLuma is 1 for Luma, 0 for RGB (one-hot ensured by C#)
+    return lerp(rgb, float3(y, y, y), _ModeLuma);
+}
+
+int2 ClampPix(int2 p, int w, int h)
+{
+    p.x = clamp(p.x, 0, w - 1);
+    p.y = clamp(p.y, 0, h - 1);
+    return p;
+}
+
+uint2 GroupCount2D(uint w, uint h)
+{
+    const uint TS = 16;
+    return uint2((w + TS - 1) / TS, (h + TS - 1) / TS);
+}
+
+// 1) Resample guide (or edge) to depth resolution
+[numthreads(16,16,1)]
+void KResampleGuide(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_Width || id.y >= (uint)_Height) return;
+    float2 uv = (float2(id.xy) + 0.5) / float2(_Width, _Height);
+    float3 I = SampleGuideLumaRGB(uv);
+    _GuideDst[int2(id.xy)] = float4(I, 1.0);
+}
+
+// 2) Prepare weighted contributions per pixel
+// A0: (m, mI, mP, mII)
+// B0: (mIP.x, mIP.y, mIP.z, 0)
+[numthreads(16,16,1)]
+void KPrepareWeighted(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_Width || id.y >= (uint)_Height) return;
+    int2 p = int2(id.xy);
+    float z = _Depth.Load(int3(p, 0));
+    float m = step(0.0, z) * step(z, 3.402823e+38); // valid if z>=0 and not INF/NaN proxy
+    float3 I = _Guide.Load(int3(p, 0)).xyz;
+
+    float mP = m * z;
+    float3 mI = m * I;
+    float mII = m * dot(I, I);
+    float3 mIP = m * (I * z);
+
+    _A0[p] = float4(m, mI.x, mP, mII);
+    _B0[p] = float4(mIP, 0.0);
+    _C0[p] = 0;
+}
+
+// 3) Clear a generic RGBA target to 0 (bind _DstRGBA)
+RWTexture2D<float4> _DstRGBA; // generic destination
+[numthreads(16,16,1)]
+void KClearRGBA(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_IntWidth || id.y >= (uint)_IntHeight) return;
+    _DstRGBA[int2(id.xy)] = 0;
+}
+
+// 4) Inclusive prefix sums across rows/cols using generic bindings
+Texture2D<float4> _SrcRGBA; // WxH source for row pass
+
+// Row prefix: _DstRGBA[y,0]=0; for x in [1..W]: _DstRGBA[y,x] = _DstRGBA[y,x-1] + _SrcRGBA[y-1,x-1]
+[numthreads(1,1,1)]
+void KPrefixRowRGBA(uint3 id : SV_DispatchThreadID)
+{
+    uint y = id.y; // Dispatch as (1, rows, 1)
+    if (y >= (uint)_IntHeight) return;
+    if (y == 0) { // zero border row
+        for (uint x = 0; x < (uint)_IntWidth; ++x) _DstRGBA[int2(x,0)] = 0;
+        return;
+    }
+    _DstRGBA[int2(0,y)] = 0;
+    for (uint x = 1; x < (uint)_IntWidth; ++x)
+    {
+        float4 prev = _DstRGBA[int2(x-1,y)];
+        float4 srcv = _SrcRGBA.Load(int3(x-1, y-1, 0));
+        _DstRGBA[int2(x,y)] = prev + srcv;
+    }
+}
+
+// Column prefix: for each column x in [0..W], accumulate downwards over y in [1..H]
+[numthreads(1,1,1)]
+void KPrefixColRGBA(uint3 id : SV_DispatchThreadID)
+{
+    uint x = id.x; // Dispatch as (cols, 1, 1)
+    if (x >= (uint)_IntWidth) return;
+    float4 accum = 0;
+    for (uint y = 0; y < (uint)_IntHeight; ++y)
+    {
+        float4 v = _DstRGBA[int2(x,y)];
+        accum += v;
+        _DstRGBA[int2(x,y)] = accum;
+    }
+}
+
+// 5) Compute box means and coefficients (a, b)
+// Using integral images AInt(m, mI, mP, mII) and BInt(mIP.rgb)
+// We output AB0 = (m*a.rgb, m*b)
+// Helper: Box sums specialized per integral to avoid passing resources as params
+float4 BoxSumA(int2 p0, int2 p1)
+{
+    float4 A = _AInt[int2(p1.x, p1.y)];
+    float4 B = _AInt[int2(p0.x, p1.y)];
+    float4 C = _AInt[int2(p1.x, p0.y)];
+    float4 D = _AInt[int2(p0.x, p0.y)];
+    return A - B - C + D;
+}
+float4 BoxSumB(int2 p0, int2 p1)
+{
+    float4 A = _BInt[int2(p1.x, p1.y)];
+    float4 B = _BInt[int2(p0.x, p1.y)];
+    float4 C = _BInt[int2(p1.x, p0.y)];
+    float4 D = _BInt[int2(p0.x, p0.y)];
+    return A - B - C + D;
+}
+float4 BoxSumAB(int2 p0, int2 p1)
+{
+    float4 A = _ABInt[int2(p1.x, p1.y)];
+    float4 B = _ABInt[int2(p0.x, p1.y)];
+    float4 C = _ABInt[int2(p1.x, p0.y)];
+    float4 D = _ABInt[int2(p0.x, p0.y)];
+    return A - B - C + D;
+}
+
+[numthreads(16,16,1)]
+void KBoxStats(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_Width || id.y >= (uint)_Height) return;
+    int2 p = int2(id.xy);
+
+    int r = _Radius;
+    // inclusive integral coordinates (shift by +1)
+    int2 p0 = int2(max(p.x - r, 0), max(p.y - r, 0));
+    int2 p1 = int2(min(p.x + r, _Width - 1), min(p.y + r, _Height - 1));
+    p0 += 1; p1 += 1;
+
+    float4 sA = BoxSumA(p0, p1); // (sum m, sum mI.x, sum mP, sum mII)
+    float4 sB = BoxSumB(p0, p1); // (sum mIP.x, sum mIP.y, sum mIP.z, 0)
+
+    float sumM   = sA.x;
+    float sumMIx = sA.y;
+    float sumMP  = sA.z;
+    float sumMII = sA.w;
+    float3 sumMIP = sB.xyz;
+
+    // meanI (here using only x component if Luma; when RGB, _GuideDst.xyz are identical in Luma mode, ok)
+    float meanI = sumMIx / max(sumM, 1e-6);
+    float meanP = sumMP  / max(sumM, 1e-6);
+    float corrI = sumMII / max(sumM, 1e-6);
+    float varI  = max(corrI - meanI * meanI, 0.0);
+    float covIp = sumMIP.x / max(sumM, 1e-6) - meanI * meanP;
+
+    float a = covIp / (varI + _Epsilon);
+    float b = meanP - a * meanI;
+
+    // Weight for output gating
+    float wGate = step(_MinValidWeight, sumM);
+
+    _AB0[p] = float4(a * sumM, b * sumM, wGate, 0.0);
+}
+
+// 6) Output: q = meanA * I + meanB, then gate by weight to invalid
+[numthreads(16,16,1)]
+void KOutput(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_Width || id.y >= (uint)_Height) return;
+    int2 p = int2(id.xy);
+    int r = _Radius;
+    int2 p0 = int2(max(p.x - r, 0), max(p.y - r, 0)) + 1;
+    int2 p1 = int2(min(p.x + r, _Width - 1), min(p.y + r, _Height - 1)) + 1;
+
+    float4 sA = BoxSumA(p0, p1); // sum m, sum mI.x, sum mP, sum mII
+    float4 sAB = BoxSumAB(p0, p1); // sum (m*a), sum(m*b), sum(wGate), 0
+
+    float sumM = sA.x;
+    float meanA = sAB.x / max(sumM, 1e-6);
+    float meanB = sAB.y / max(sumM, 1e-6);
+    float wGate = step(_MinValidWeight, sumM);
+
+    float3 I = _Guide.Load(int3(p, 0)).xyz;
+    float q = meanA * I.x + meanB; // Luma or Edge use .x; RGB would require extension to vector a
+
+    // Branchless gate to invalid value when insufficient weight
+    _OutTex[p] = lerp(_InvalidDepth, q, wGate);
+}
