@@ -3,6 +3,9 @@ using UnityEngine;
 using ImOTAR.Tools;
 
 public class RegionMeanDepthRefiner : DepthRefiner {
+    // Placeholder implementations to satisfy FrameProvider. Not used for this refiner.
+    public override RenderTexture FrameTex => throw new NotImplementedException("RegionMeanDepthRefiner: FrameTex not implemented (placeholder)");
+    public override DateTime TimeStamp => throw new NotImplementedException("RegionMeanDepthRefiner: TimeStamp not implemented (placeholder)");
     public enum ZeroRegionMode {
         MinusOne = 0,         // always output -1
         Zero = 1,             // always output 0

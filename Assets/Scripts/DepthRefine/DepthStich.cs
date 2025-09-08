@@ -34,6 +34,8 @@ public class DepthStich : FrameProvider
     private void OnSrcUpdated(RenderTexture updatedSrc) {
         if (verboseLogs) Debug.Log($"[DepthStich] OnSrcUpdated: {updatedSrc.width}x{updatedSrc.height}, support: {supportProvider?.FrameTex?.width}x{supportProvider?.FrameTex?.height}");
 
+        
+
         var srcRT = updatedSrc;
         var supRT = supportProvider != null ? supportProvider.FrameTex : null;
         if (srcRT == null || supRT == null) return;

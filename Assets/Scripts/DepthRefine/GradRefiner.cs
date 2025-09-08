@@ -2,6 +2,9 @@ using System;
 using UnityEngine;
 
 public class GradRefiner : DepthRefiner {
+    // Placeholder implementations to satisfy FrameProvider. Not used for this refiner.
+    public override RenderTexture FrameTex => throw new NotImplementedException("GradRefiner: FrameTex not implemented (placeholder)");
+    public override DateTime TimeStamp => throw new NotImplementedException("GradRefiner: TimeStamp not implemented (placeholder)");
     public enum ZeroRegionMode {
         MinusOne = 0,
         Zero = 1,

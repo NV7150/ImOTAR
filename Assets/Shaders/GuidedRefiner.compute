@@ -1,0 +1,153 @@
+#pragma kernel KPrep
+#pragma kernel KBoxH
+#pragma kernel KBoxV
+#pragma kernel KCoeff
+#pragma kernel KCompose
+
+// 16x16 thread groups as specified
+[numthreads(16,16,1)]
+void KPrep(uint3 id : SV_DispatchThreadID);
+[numthreads(16,16,1)]
+void KBoxH(uint3 id : SV_DispatchThreadID);
+[numthreads(16,16,1)]
+void KBoxV(uint3 id : SV_DispatchThreadID);
+[numthreads(16,16,1)]
+void KCoeff(uint3 id : SV_DispatchThreadID);
+[numthreads(16,16,1)]
+void KCompose(uint3 id : SV_DispatchThreadID);
+
+// Uniforms
+int _Width;
+int _Height;
+int _Radius;        // box radius (pixels)
+int _KernelSize;    // 2*_Radius+1
+float _Epsilon;     // meters^2
+float _EdgeEpsScale;// >= 1
+
+// Textures
+Texture2D<float> _DepthTex;      // RFloat, meters
+Texture2D<float> _EdgeTex;       // RFloat, 0..1 (RGB resolution)
+
+RWTexture2D<float> _GTex;        // guidance resampled to depth grid
+RWTexture2D<float> _PTex;        // depth copy
+RWTexture2D<float> _G2Tex;
+RWTexture2D<float> _GPTex;
+
+RWTexture2D<float> _TempTex;     // horizontal box sums temp
+RWTexture2D<float> _OutTex;      // vertical box -> mean output
+
+Texture2D<float> _InTex;         // generic read for box passes
+
+// Means
+Texture2D<float> _MeanG;
+Texture2D<float> _MeanP;
+Texture2D<float> _MeanG2;
+Texture2D<float> _MeanGP;
+
+RWTexture2D<float> _ATex;
+RWTexture2D<float> _BTex;
+
+Texture2D<float> _MeanA;
+Texture2D<float> _MeanB;
+
+RWTexture2D<float> _Output;      // final refined depth
+
+// Helper: clamp to bounds
+int2 ClampCoord(int2 p)
+{
+    p.x = clamp(p.x, 0, _Width - 1);
+    p.y = clamp(p.y, 0, _Height - 1);
+    return p;
+}
+
+// KPrep: prepare G, P, G^2, G*P on depth grid
+void KPrep(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Width || id.y >= _Height) return;
+    int2 p = int2(id.xy);
+
+    float depth = _DepthTex.Load(int3(p, 0));
+
+    // Sample edge by normalized UV mapping to edge texture resolution
+    // Compute edge pixel via manual mapping since SampleLevel with sampler isn't directly available
+    uint edgeW, edgeH;
+    _EdgeTex.GetDimensions(edgeW, edgeH);
+    float2 uv = (float2(p) + 0.5) / float2(_Width, _Height);
+    int2 ePix = int2(saturate(uv) * float2(edgeW, edgeH));
+    ePix = int2(min(ePix, int2(edgeW - 1, edgeH - 1)));
+    float guide = _EdgeTex.Load(int3(ePix, 0));
+
+    _GTex[p]  = guide;
+    _PTex[p]  = depth;
+    _G2Tex[p] = guide * guide;
+    _GPTex[p] = guide * depth;
+}
+
+// Horizontal box pass: prefix-like sliding window, clamped borders (minimal implementation)
+void KBoxH(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Width || id.y >= _Height) return;
+    int2 p = int2(id.xy);
+
+    // Compute sum along X for window centered at p with radius _Radius
+    float sum = 0.0;
+    for (int dx = -_Radius; dx <= _Radius; ++dx)
+    {
+        int2 q = p + int2(dx, 0);
+        q = ClampCoord(q);
+        sum += _InTex.Load(int3(q, 0));
+    }
+    _TempTex[p] = sum;
+}
+
+// Vertical box pass: take horizontal sums and sum along Y, then divide by area
+void KBoxV(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Width || id.y >= _Height) return;
+    int2 p = int2(id.xy);
+
+    float sum = 0.0;
+    for (int dy = -_Radius; dy <= _Radius; ++dy)
+    {
+        int2 q = p + int2(0, dy);
+        q = ClampCoord(q);
+        sum += _InTex.Load(int3(q, 0));
+    }
+
+    float area = (float)(_KernelSize * _KernelSize);
+    _OutTex[p] = sum / area;
+}
+
+// KCoeff: compute a and b with edge-modulated epsilon
+void KCoeff(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Width || id.y >= _Height) return;
+    int2 p = int2(id.xy);
+
+    float meanG  = _MeanG.Load(int3(p, 0));
+    float meanP  = _MeanP.Load(int3(p, 0));
+    float meanG2 = _MeanG2.Load(int3(p, 0));
+    float meanGP = _MeanGP.Load(int3(p, 0));
+    float guide  = _GTex[p];
+
+    float varG = max(0.0, meanG2 - meanG * meanG);
+    float covGP = meanGP - meanG * meanP;
+
+    // epsilon modulation based on local guide (edge)
+    float epsLocal = _Epsilon * lerp(1.0, _EdgeEpsScale, saturate(guide));
+
+    float a = covGP / (varG + epsLocal);
+    float b = meanP - a * meanG;
+
+    _ATex[p] = a;
+    _BTex[p] = b;
+}
+
+// KCompose: q = meanA * G + meanB
+void KCompose(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Width || id.y >= _Height) return;
+    int2 p = int2(id.xy);
+    float q = _MeanA.Load(int3(p, 0)) * _GTex[p] + _MeanB.Load(int3(p, 0));
+    _Output[p] = q;
+}
