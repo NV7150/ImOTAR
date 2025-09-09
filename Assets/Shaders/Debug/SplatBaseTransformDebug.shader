@@ -1,0 +1,97 @@
+Shader "ImOTAR/SplatBaseTransformDebug" {
+    Properties {}
+    SubShader {
+        Tags { "RenderType"="Opaque" "Queue"="Geometry" }
+        Pass {
+            Name "SplatPass"
+            ZTest LEqual
+            ZWrite On
+            Cull Off
+
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 4.5
+
+            StructuredBuffer<float4> _Points; // xyz cam-space [m], w radius [m] (holes: w < 0)
+
+            float4x4 _R; // source->current rotation (3x3 used)
+            float3 _t;   // source->current translation (current frame)
+
+            float _FxPx, _FyPx, _CxPx, _CyPx;
+            int _Width, _Height;
+            float4x4 _Proj; // camera projection built from intrinsics & near/far
+
+            int _RenderMode; // 0: valid only (r>=0), 1: holes only (r<0)
+
+            struct VSOut {
+                float4 posCS : SV_Position;
+                float depthM : TEXCOORD0; // meters
+            };
+
+            // map vertexID -> (pointIndex, corner)
+            static const float2 corners[6] = {
+                float2(-1.0, -1.0), float2(1.0, -1.0), float2(1.0, 1.0),
+                float2(-1.0, -1.0), float2(1.0, 1.0), float2(-1.0, 1.0)
+            };
+
+            VSOut Vert(uint vid : SV_VertexID){
+                VSOut o;
+                uint pointIndex = vid / 6;
+                uint cornerIndex = vid - pointIndex * 6;
+                float2 c = corners[cornerIndex];
+
+                float4 p = _Points[pointIndex];
+                float r = p.w;
+
+                // Early reject based on render mode (minimal branching)
+                bool isHole = (r < 0.0);
+                if ((_RenderMode == 0 && isHole) || (_RenderMode == 1 && !isHole)){
+                    // send off-screen
+                    o.posCS = float4(0, 0, 0, 0);
+                    o.depthM = -1.0;
+                    return o;
+                }
+
+                // Transform to current camera frame
+                float3 x0 = p.xyz;
+                float3 x1 = mul((float3x3)_R, x0) + _t;
+
+                // compute pixel radius
+                float r_px = (r * _FxPx) / max(x1.z, 1e-6);
+
+                // project to pixel center
+                float u = (_FxPx * x1.x / x1.z) + _CxPx + c.x * r_px * 0.5;
+                float v = (_FyPx * x1.y / x1.z) + _CyPx + c.y * r_px * 0.5;
+
+                // convert to NDC and then clip using custom projection
+                // Build a clip-space position that matches given pixel pos using _Proj
+                // Inverse of usual path: we form a camera-space position for the quad corner and multiply by _Proj
+                // Recover camera-space from pixel offsets at given depth
+                float X = (u - _CxPx) * x1.z / _FxPx;
+                float Y = (v - _CyPx) * x1.z / _FyPx;
+                float4 cam = float4(X, Y, x1.z, 1.0);
+                o.posCS = mul(_Proj, cam);
+                o.depthM = x1.z;
+                // float x_ndc = ( (u + 0.5) / _Width  ) * 2.0 - 1.0;
+                // float y_ndc = 1.0 - ( (v + 0.5) / _Height ) * 2.0; // 上下反転（D3D/Metal系）
+
+                // o.posCS = float4(x_ndc, y_ndc, 0.0, 1.0); // とりあえず z は 0 でも可（ZはPSで書かない前提なら）
+                // o.depthM = x1.z;
+                return o;
+            }
+
+            float4 Frag(VSOut i) : SV_Target {
+                return float4(0, 0, 0, 0);
+                // 有効深度なら1を出力（TestVisualizerで白く見える）
+                float valid = step(0.0, i.depthM);
+                return float4(valid, 0, 0, 1);
+            }
+            ENDHLSL
+        }
+    }
+}
+
+
+
+

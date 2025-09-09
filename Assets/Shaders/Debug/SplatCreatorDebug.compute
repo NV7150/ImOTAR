@@ -1,0 +1,56 @@
+#pragma kernel CSMain
+
+StructuredBuffer<float> _Dummy; // prevent empty SRV set warnings on some drivers
+
+Texture2D<float> _DepthTex; // meters
+SamplerState sampler_linear_clamp; // not used (we use Load)
+
+RWStructuredBuffer<float4> _Points; // xyz = camera-space [m], w = radius [m]; holes: w = -1
+RWStructuredBuffer<uint> _ValidCount; // 有効点の数をカウント
+
+int _Width;
+int _Height;
+
+float _FxPx;
+float _FyPx;
+float _CxPx;
+float _CyPx;
+
+float _RScale;
+float _RMin;
+float _RMax;
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID){
+    if (id.x >= (uint)_Width || id.y >= (uint)_Height) return;
+
+    uint idx = id.y * (uint)_Width + id.x;
+
+    int2 uv = int2(id.xy);
+    float z = _DepthTex.Load(int3(uv, 0));
+
+    // hole if z invalid
+    bool invalid = !(isfinite(z)) || (z <= 0.0);
+
+    // project to camera space (meters)
+    // use pixel center
+    float u = (float)uv.x + 0.5;
+    float v = (float)uv.y + 0.5;
+    float x = ((u - _CxPx) / _FxPx) * z;
+    float y = ((v - _CyPx) / _FyPx) * z;
+
+    // radius in meters: r = rScale * z / fx_px, clamped
+    float r = (_RScale * z) / _FxPx;
+    r = clamp(r, _RMin, _RMax);
+
+    // mark holes with r = -1 and store pixel coords in x,y for screen-space stamp later
+    if (invalid){
+        _Points[idx] = float4(u, v, 0.0, -1.0);
+    } else {
+        _Points[idx] = float4(x, y, z, r);
+        // 有効点の数をカウント
+        InterlockedAdd(_ValidCount[0], 1);
+    }
+}
+
+
