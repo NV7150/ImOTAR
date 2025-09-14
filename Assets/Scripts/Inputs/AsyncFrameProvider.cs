@@ -15,6 +15,11 @@ public abstract class AsyncFrameProvider: FrameProvider{
         return frameId;
     }
 
+    protected Guid ProcessStart(Guid id){
+        OnAsyncFrameStarted?.Invoke(id);
+        return id;
+    }
+
     protected void ProcessEnd(Guid id){
         var frame = new AsyncFrame(id, FrameTex);
         OnAsyncFrameUpdated?.Invoke(frame);
