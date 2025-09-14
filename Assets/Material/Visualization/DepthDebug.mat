@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: DepthDebug
-  m_Shader: {fileID: 4800000, guid: fa922626b1e264ce9b1a16eaa631f421, type: 3}
+  m_Shader: {fileID: 4800000, guid: e77cef79fbf434d14abf121606993b7c, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -100,11 +100,14 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
-    - _Max: 5
+    - _Max: 15
     - _Metallic: 0
     - _Min: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.005
+    - _Percentile25: 3.75
+    - _Percentile50: 7.5
+    - _Percentile75: 11.25
     - _QueueOffset: 0
     - _ReceiveShadows: 1
     - _Smoothness: 0.5

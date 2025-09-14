@@ -33,6 +33,9 @@ EditorBuildSettings:
     path: Assets/Scenes/ScheduleTestTranslatGrad.unity
     guid: 5af5bfd59cc9d49508e7c693795b6717
   - enabled: 1
+    path: Assets/Scenes/StructureBase2.unity
+    guid: 9e69a545b79324d78b0e95823718f2df
+  - enabled: 0
     path: Assets/Scenes/StructureBase1.unity
     guid: 322140de9c2bb42538821ed26a5ddfaf
   m_configObjects:

@@ -1,0 +1,40 @@
+#pragma kernel CSMain
+
+// Input: ARKit confidence texture (0, 1, 2 as uint8 normalized to 0, 0.0039, 0.0078)
+Texture2D<float> _SourceTex;
+SamplerState sampler_SourceTex;
+
+// Output: Normalized confidence (0, 0.5, 1)
+RWTexture2D<float4> _Result;
+
+// Dimensions
+uint _SourceWidth;
+uint _SourceHeight;
+uint _TargetWidth;
+uint _TargetHeight;
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _TargetWidth || id.y >= _TargetHeight)
+        return;
+
+    // Calculate source coordinates (nearest neighbor sampling)
+    float2 srcUV = float2(
+        (float)id.x / (float)_TargetWidth,
+        (float)id.y / (float)_TargetHeight
+    );
+    
+    // Sample source confidence value
+    float confValue = _SourceTex.SampleLevel(sampler_SourceTex, srcUV, 0).r;
+    
+    // Convert from normalized uint8 (0, 0.0039, 0.0078) back to discrete values (0, 1, 2)
+    // and then map to (0, 0.5, 1)
+    float discreteValue = round(saturate(confValue) * 255.0);
+    discreteValue = min(discreteValue, 2.0);
+    float normalizedConf = discreteValue / 2.0; // Maps 0→0, 1→0.5, 2→1
+    
+    // Write result
+    _Result[id.xy] = float4(normalizedConf, normalizedConf, normalizedConf, 1.0);
+}
+
