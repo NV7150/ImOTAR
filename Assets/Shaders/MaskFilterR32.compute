@@ -1,0 +1,40 @@
+#pragma kernel CSMain_GreaterEqual
+#pragma kernel CSMain_LessEqual
+
+#define THREAD_GROUP_SIZE_X 16
+#define THREAD_GROUP_SIZE_Y 16
+#define THREAD_GROUP_SIZE_Z 1
+
+RWTexture2D<float> _Output;
+Texture2D<float> _Input;
+Texture2D<float> _Mask;
+
+cbuffer Params {
+	float _Threshold;
+	float _FillValue;
+	int _Width;
+	int _Height;
+};
+
+// Thread group size constants; C# validates multiples to avoid bounds branching.
+[numthreads(THREAD_GROUP_SIZE_X, THREAD_GROUP_SIZE_Y, THREAD_GROUP_SIZE_Z)]
+void CSMain_GreaterEqual (uint3 id : SV_DispatchThreadID)
+{
+	float m = _Mask[int2(id.xy)];
+	float v = _Input[int2(id.xy)];
+	// Branchless: select = step(threshold, m) -> 1 if m >= threshold else 0
+	float select = step(_Threshold, m);
+	_Output[int2(id.xy)] = mad(select, v - _FillValue, _FillValue);
+}
+
+[numthreads(THREAD_GROUP_SIZE_X, THREAD_GROUP_SIZE_Y, THREAD_GROUP_SIZE_Z)]
+void CSMain_LessEqual (uint3 id : SV_DispatchThreadID)
+{
+	float m = _Mask[int2(id.xy)];
+	float v = _Input[int2(id.xy)];
+	// Branchless: select = step(m, threshold) -> 1 if threshold >= m else 0
+	float select = step(m, _Threshold);
+	_Output[int2(id.xy)] = mad(select, v - _FillValue, _FillValue);
+}
+
+
