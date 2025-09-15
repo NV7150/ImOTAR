@@ -36,6 +36,8 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
     private bool normalizeRelativeOutput = false;
     [SerializeField, Min(0f), Tooltip("Small epsilon to avoid division by zero during normalization.")]
     private float normalizationEpsilon = 1e-6f;
+    [SerializeField, Min(0f), Tooltip("Positive threshold for reference depth mask (M > 0). Values >= tau are treated as valid.")]
+    private float refDepthPositiveTau = 1e-3f;
 
     [Header("Debug")]
     [SerializeField] private bool verboseLogging = true;
@@ -46,6 +48,16 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
     [SerializeField, Tooltip("Max ms difference allowed when synchronizing RGB only (kept for parity; not used)")]
     private float maxTimeSyncDifferenceMs = 100f;
 
+    [Header("Calibration")]
+    [SerializeField] private bool useCalibration = false;
+    [SerializeField] private FrameProvider referenceDepthRec;
+    [SerializeField, Min(1)] private int minValidPixels = 1024;
+    [SerializeField] private float maxTimeSyncDifferenceMsRef = 50f;
+    public enum CalibrationMethod { L2, HuberIRLS }
+    [SerializeField] private CalibrationMethod calibrationMethod = CalibrationMethod.L2;
+    [SerializeField, Min(1)] private int irlsIterations = 2;
+    [SerializeField, Min(0f)] private float huberDelta = 0.1f;
+
     // Constants
     private const int RGB_CHANNELS = 3;
     private const int DEPTH_CHANNELS = 1;
@@ -53,11 +65,14 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
     // Runtime
     private Model _runtimeModel;
     private Worker _worker;
+    private int _baseInputCount;
 
     // GPU resources
     private RenderTexture _resizeRGB, _canvasRGB;   // ARGB32
     private Tensor<float> _imgTensorGPU;            // [1,3,H,W]
     private RenderTexture _fullOutputRT;            // [dstW x dstH] RFloat
+    private RenderTexture _resizeRefDepth, _refDepthCanvas; // RFloat
+    private Tensor<float> _refTensorGPU;                    // [1,1,H,W]
 
     // Letterbox cache
     private int _dstW, _dstH, _newW, _newH, _padX, _padY;
@@ -65,7 +80,7 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
 
     // Model IO indices
     private int _imageInputIndex = 0;
-    private int _depthOutputIndex = 0;
+    private int _refInputIndex = -1;
 
     // Execution state
     private IEnumerator _iter;
@@ -86,6 +101,7 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
         public bool isValid;
     }
     private FrameData _latestRgb;
+    private FrameData _latestRef;
     private bool _consumedLatest = true;
 
     // Meta (abstract props)
@@ -117,8 +133,11 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
         ReleaseRT(ref _resizeRGB);
         ReleaseRT(ref _canvasRGB);
         ReleaseRT(ref _fullOutputRT);
+        ReleaseRT(ref _resizeRefDepth);
+        ReleaseRT(ref _refDepthCanvas);
 
         _imgTensorGPU?.Dispose(); _imgTensorGPU = null;
+        _refTensorGPU?.Dispose(); _refTensorGPU = null;
 
         if (_ownsOutputRT) {
             ReleaseRT(ref outputRT);
@@ -132,6 +151,12 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
             throw new InvalidOperationException($"{logPrefix} cameraRec is not assigned.");
         cameraRec.OnFrameUpdated -= OnRgbFrameReceived;
         cameraRec.OnFrameUpdated += OnRgbFrameReceived;
+        if (useCalibration) {
+            if (referenceDepthRec == null)
+                throw new InvalidOperationException($"{logPrefix} referenceDepthRec is not assigned while useCalibration=true.");
+            referenceDepthRec.OnFrameUpdated -= OnRefDepthReceived;
+            referenceDepthRec.OnFrameUpdated += OnRefDepthReceived;
+        }
     }
 
     public override Guid TryStartProcessing(){
@@ -143,6 +168,13 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
             return Guid.Empty;
         if (!_latestRgb.isValid)
             return Guid.Empty;
+        if (useCalibration) {
+            if (!_latestRef.isValid)
+                return Guid.Empty;
+            var dtMs = Mathf.Abs((float)(_latestRgb.timestamp - _latestRef.timestamp).TotalMilliseconds);
+            if (dtMs > maxTimeSyncDifferenceMsRef)
+                throw new InvalidOperationException($"{logPrefix} Ref depth not synchronized: dtMs={dtMs} > {maxTimeSyncDifferenceMsRef}");
+        }
 
         var ts = _latestRgb.timestamp;
         var ok = Begin(_latestRgb.rgbFrame, ts);
@@ -154,6 +186,7 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
             Debug.Log($"{logPrefix} Begin OK: jobId={_currentJobId}, ts={ts:HH:mm:ss.fff}");
         _consumedLatest = true;
         _latestRgb.isValid = false;
+        if (useCalibration) _latestRef.isValid = false;
         return _currentJobId;
     }
 
@@ -235,14 +268,20 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
             throw new InvalidOperationException($"{logPrefix} letterboxMultiple must be > 0");
 
         var baseModel = ModelLoader.Load(onnxModel);
+        _baseInputCount = baseModel.inputs != null ? baseModel.inputs.Count : 0;
         ResolveNamesFromModel(baseModel);
 
-        if (normalizeRelativeOutput) {
+        if (useCalibration) {
+            if (!normalizeRelativeOutput)
+                throw new InvalidOperationException($"{logPrefix} useCalibration requires normalizeRelativeOutput=true.");
+            _runtimeModel = BuildNormalizedAndCalibratedModel(baseModel);
+        } else if (normalizeRelativeOutput) {
             _runtimeModel = BuildNormalizedModel(baseModel);
         } else {
             _runtimeModel = baseModel;
         }
         _worker = new Worker(_runtimeModel, backendType);
+        ResolveInputIndicesFromRuntimeModel(_runtimeModel);
         _isInitialized = true;
         if (verboseLogging)
             Debug.Log($"{logPrefix} Model loaded. inputs={_runtimeModel.inputs.Count}, outputs={_runtimeModel.outputs.Count}, backend={backendType}");
@@ -268,6 +307,129 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
 
         return g.Compile(norm);
     }
+private Model BuildNormalizedAndCalibratedModel(Model baseModel){
+    var g = new FunctionalGraph();
+    var fInputs = g.AddInputs(baseModel); // image only
+    var refDepth = g.AddInput<float>(new DynamicTensorShape(1, DEPTH_CHANNELS, onnxHeight, onnxWidth));
+
+    var fOuts = Functional.Forward(baseModel, fInputs);
+    if (fOuts == null || fOuts.Length == 0)
+        throw new InvalidOperationException($"{logPrefix} Base model produced no outputs.");
+    var raw = fOuts[0]; // [1,1,H,W]
+
+    // ---- フレーム内正規化（自然形）----
+    var axes = new int[] { 1, 2, 3 };
+    var rMin = Functional.ReduceMin(raw, axes, true);
+    var rMax = Functional.ReduceMax(raw, axes, true);
+    var denom = rMax - rMin + normalizationEpsilon;
+    var z0 = Functional.Clamp((raw - rMin) / denom, 0f, 1f); // [0,1]
+
+    // ---- 無効=-1 を除外する連続マスク（refDepth>tau のみ有効）----
+    var tauC = Functional.Constant(refDepthPositiveTau);
+    var diffValid = refDepth - tauC;
+    var posValid  = Functional.Clamp(diffValid, 0f, 1e9f);                 // ReLU
+    var maskValid = posValid / (posValid + normalizationEpsilon);          // 0..1
+
+    // ---- 向きの自動決定（z0 と refDepth の加重共分散の符号）----
+    var n0   = Functional.ReduceSum(maskValid, axes, false);
+    var Sx0  = Functional.ReduceSum(z0 * maskValid, axes, false);
+    var Sy0  = Functional.ReduceSum(refDepth * maskValid, axes, false);
+    var Sxx0 = Functional.ReduceSum(z0 * z0 * maskValid, axes, false);
+    var Sxy0 = Functional.ReduceSum(z0 * refDepth * maskValid, axes, false);
+
+    var invN0 = 1.0f / (n0 + normalizationEpsilon);
+    var mx0   = Sx0 * invN0;
+    var my0   = Sy0 * invN0;
+    var cov0  = Sxy0 * invN0 - mx0 * my0;
+    var sCov  = cov0 / (Functional.Abs(cov0) + normalizationEpsilon);      // ~sign(cov0)
+
+    var half = Functional.Constant(0.5f);
+    var one  = Functional.Constant(1f);
+    var z    = half * ( (one + sCov) * z0 + (one - sCov) * (one - z0) );   // 向きを安定化
+
+    // ---- 端点アンカー（高速・連続・GPUのみ）----
+    // 近側帯域 z <= zNearTh、遠側帯域 z >= zFarTh を抽出し、
+    // それぞれの refDepth 平均を "疑似サンプル" として加える。
+    // アンカー重みは観測画素数に比例（anchorScale）。
+    var zNearTh = Functional.Constant(0.05f);
+    var zFarTh  = Functional.Constant(0.95f);
+    var anchorScale = Functional.Constant(0.10f); // 0.1 * (#帯域画素) を疑似サンプル重みとする
+
+    // 近側マスク: zNearTh - z の ReLU を0..1へ
+    var mNeStep = Functional.Clamp(zNearTh - z, 0f, 1e9f);
+    var mNeBand = (mNeStep) / (mNeStep + normalizationEpsilon);
+    var mNe     = mNeBand * maskValid;
+
+    // 遠側マスク: z - zFarTh の ReLU を0..1へ
+    var mFaStep = Functional.Clamp(z - zFarTh, 0f, 1e9f);
+    var mFaBand = (mFaStep) / (mFaStep + normalizationEpsilon);
+    var mFa     = mFaBand * maskValid;
+
+    var nNe = Functional.ReduceSum(mNe, axes, false);                        // 近側サンプル数
+    var nFa = Functional.ReduceSum(mFa, axes, false);                        // 遠側サンプル数
+
+    var yNe = Functional.ReduceSum(refDepth * mNe, axes, false) / (nNe + normalizationEpsilon); // 近側平均
+    var yFa = Functional.ReduceSum(refDepth * mFa, axes, false) / (nFa + normalizationEpsilon); // 遠側平均
+
+    var wNe = anchorScale * nNe;     // 近側アンカー重み（疑似サンプル数）
+    var wFa = anchorScale * nFa;     // 遠側アンカー重み
+
+    // アンカーは (z=0, y=yNe), (z=1, y=yFa) の2点を追加したのと等価
+    var n    = Functional.ReduceSum(maskValid, axes, false);
+    var Sx   = Functional.ReduceSum(z * maskValid, axes, false);
+    var Sy   = Functional.ReduceSum(refDepth * maskValid, axes, false);
+    var Sxx  = Functional.ReduceSum(z * z * maskValid, axes, false);
+    var Sxy  = Functional.ReduceSum(z * refDepth * maskValid, axes, false);
+
+    var nA   = n   + wNe + wFa;
+    var SxA  = Sx  + wFa;                  // z=1 アンカーのみ寄与
+    var SyA  = Sy  + wNe * yNe + wFa * yFa;
+    var SxxA = Sxx + wFa;                  // (1)^2
+    var SxyA = Sxy + wFa * yFa;            // 1*yFa
+
+    var D    = nA * SxxA - SxA * SxA;
+    var Dsafe= D + normalizationEpsilon * (1f + 1f / (nA + 1f));
+    var alpha0 = (nA * SxyA - SxA * SyA) / Dsafe;
+    var beta0  = (SyA - alpha0 * SxA) / (nA + normalizationEpsilon);
+
+    var alpha = alpha0;
+    var beta  = beta0;
+
+    // ---- IRLS（使用時はアンカーを各反復に再注入）----
+    if (calibrationMethod == CalibrationMethod.HuberIRLS && irlsIterations > 0) {
+        for (int i = 0; i < irlsIterations; i++) {
+            var r   = alpha * z + beta - refDepth;
+            var abd = Functional.Sqrt(r * r + normalizationEpsilon);
+            var w   = Functional.Clamp(huberDelta / abd, 0f, 1f); // Huber重み
+
+            var Sw   = Functional.ReduceSum(maskValid * w, axes, false);
+            var Swx  = Functional.ReduceSum(maskValid * w * z, axes, false);
+            var Swy  = Functional.ReduceSum(maskValid * w * refDepth, axes, false);
+            var Swxx = Functional.ReduceSum(maskValid * w * z * z, axes, false);
+            var Swxy = Functional.ReduceSum(maskValid * w * z * refDepth, axes, false);
+
+            var SwA   = Sw   + wNe + wFa;
+            var SwxA  = Swx  + wFa;
+            var SwyA  = Swy  + wNe * yNe + wFa * yFa;
+            var SwxxA = Swxx + wFa;
+            var SwxyA = Swxy + wFa * yFa;
+
+            var D2    = SwA * SwxxA - SwxA * SwxA;
+            var D2safe= D2 + normalizationEpsilon * (1f + 1f / (SwA + 1f));
+            var aNew  = (SwA * SwxyA - SwxA * SwyA) / D2safe;
+            var bNew  = (SwyA - aNew * SwxA) / (SwA + normalizationEpsilon);
+
+            alpha = aNew;
+            beta  = bNew;
+        }
+    }
+
+    var meters = Functional.Clamp(alpha * z + beta, 0f, 1e9f);
+    return g.Compile(meters);
+}
+
+
+
 
     private void ResolveNamesFromModel(Model model){
         // Input
@@ -279,28 +441,22 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
             }
         }
         imageInputName = string.IsNullOrEmpty(resolvedInput) ? throw new InvalidOperationException($"{logPrefix} Cannot resolve input name for image") : resolvedInput;
+        // No output name reliance after composition
+    }
 
-        // Output
-        string resolvedOut = depthOutputName;
-        foreach (var o in model.outputs){
-            var n = o.name ?? string.Empty;
-            if (!string.IsNullOrEmpty(n) && n.IndexOf("depth", StringComparison.OrdinalIgnoreCase) >= 0) {
-                resolvedOut = n; break;
-            }
-        }
-        depthOutputName = string.IsNullOrEmpty(resolvedOut) ? throw new InvalidOperationException($"{logPrefix} Cannot resolve output name for depth") : resolvedOut;
-
-        // Index
+    private void ResolveInputIndicesFromRuntimeModel(Model model){
+        int count = model.inputs != null ? model.inputs.Count : 0;
+        if (count <= 0)
+            throw new InvalidOperationException($"{logPrefix} Runtime model has no inputs.");
+        // Base model inputs come first; image is the first input for DAV2
         _imageInputIndex = 0;
-        var inputs = model.inputs;
-        bool found = false;
-        for (int i = 0; i < inputs.Count; i++){
-            if (string.Equals(inputs[i].name, imageInputName, StringComparison.Ordinal)) {
-                _imageInputIndex = i; found = true; break;
-            }
+        if (useCalibration) {
+            if (count <= _baseInputCount)
+                throw new InvalidOperationException($"{logPrefix} Expected an extra ref_depth input but none was found.");
+            _refInputIndex = count - 1; // appended input
+        } else {
+            _refInputIndex = -1;
         }
-        if (!found)
-            throw new InvalidOperationException($"{logPrefix} Input index for '{imageInputName}' not found.");
     }
 
     private bool Begin(RenderTexture rgbInput, DateTime timestamp){
@@ -329,12 +485,27 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
             cb.CopyTexture(_resizeRGB, 0,0, 0,0, _newW,_newH, _canvasRGB, 0,0, _padX,_padY);
             var tfRGB = new TextureTransform().SetDimensions(_dstW, _dstH, RGB_CHANNELS).SetTensorLayout(TensorLayout.NCHW);
             cb.ToTensor(_canvasRGB, _imgTensorGPU, tfRGB);
+            if (useCalibration){
+                if (_latestRef.rgbFrame == null)
+                    throw new InvalidOperationException($"{logPrefix} reference depth frame is null.");
+                // Aspect ratio check (depth smaller but same ratio). Compute scale and verify
+                float arRGB = (float)rgbInput.width / rgbInput.height;
+                float arRef = (float)_latestRef.rgbFrame.width / _latestRef.rgbFrame.height;
+                if (Mathf.Abs(arRGB - arRef) > 1e-3f)
+                    throw new InvalidOperationException($"{logPrefix} Reference depth aspect ratio mismatch: rgb={arRGB}, ref={arRef}");
+                // Upscale depth to RGB size (bilinear), then letterbox into canvas
+                cb.Blit(_latestRef.rgbFrame, _resizeRefDepth);
+                cb.CopyTexture(_resizeRefDepth, 0,0, 0,0, _newW,_newH, _refDepthCanvas, 0,0, _padX,_padY);
+                var tfDEP = new TextureTransform().SetDimensions(_dstW, _dstH, 1).SetTensorLayout(TensorLayout.NCHW);
+                cb.ToTensor(_refDepthCanvas, _refTensorGPU, tfDEP);
+            }
             Graphics.ExecuteCommandBuffer(cb);
         }
 
         // Schedule iterable
-        var feeds = new Tensor[1];
+        var feeds = new Tensor[_runtimeModel.inputs.Count];
         feeds[_imageInputIndex] = _imgTensorGPU;
+        if (useCalibration) feeds[_refInputIndex] = _refTensorGPU;
         _iter = _worker.ScheduleIterable(feeds);
 
         _running = true;
@@ -347,12 +518,22 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
     private void EnsureResources(){
         ReleaseRT(ref _resizeRGB); ReleaseRT(ref _canvasRGB); ReleaseRT(ref _fullOutputRT);
         _imgTensorGPU?.Dispose(); _imgTensorGPU = null;
+        if (useCalibration) {
+            ReleaseRT(ref _resizeRefDepth);
+            ReleaseRT(ref _refDepthCanvas);
+            _refTensorGPU?.Dispose(); _refTensorGPU = null;
+        }
 
         _resizeRGB = AllocRT(_newW, _newH, RenderTextureFormat.ARGB32, false);
         _canvasRGB = AllocRT(_dstW, _dstH, RenderTextureFormat.ARGB32, false);
         _fullOutputRT = AllocRT(_dstW, _dstH, RenderTextureFormat.RFloat, true);
 
         _imgTensorGPU = new Tensor<float>(new TensorShape(1, RGB_CHANNELS, _dstH, _dstW));
+        if (useCalibration) {
+            _resizeRefDepth = AllocRT(_newW, _newH, RenderTextureFormat.RFloat, false);
+            _refDepthCanvas = AllocRT(_dstW, _dstH, RenderTextureFormat.RFloat, false);
+            _refTensorGPU = new Tensor<float>(new TensorShape(1, DEPTH_CHANNELS, _dstH, _dstW));
+        }
 
         if (verboseLogging)
             Debug.Log($"{logPrefix} EnsureResources: allocated RT/Tensor (outRT={(outputRT!=null)})");
@@ -420,6 +601,17 @@ public class DAV2ItrProcessor : DepthModelIterableProcessor {
         _latestRgb = new FrameData{
             timestamp = cameraRec.TimeStamp,
             rgbFrame = rgb,
+            isValid = true
+        };
+        _consumedLatest = false;
+    }
+
+    private void OnRefDepthReceived(RenderTexture depth){
+        if (referenceDepthRec == null)
+            throw new InvalidOperationException($"{logPrefix} referenceDepthRec is null in OnRefDepthReceived.");
+        _latestRef = new FrameData{
+            timestamp = referenceDepthRec.TimeStamp,
+            rgbFrame = depth,
             isValid = true
         };
         _consumedLatest = false;

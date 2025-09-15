@@ -901,10 +901,18 @@ MonoBehaviour:
   completionFrameDelay: 1
   normalizeRelativeOutput: 1
   normalizationEpsilon: 0.000001
+  refDepthPositiveTau: 0.001
   verboseLogging: 1
   logPrefix: '[DAV2-ITER]'
   cameraRec: {fileID: 1969467336}
   maxTimeSyncDifferenceMs: 500
+  useCalibration: 1
+  referenceDepthRec: {fileID: 585419339}
+  minValidPixels: 1024
+  maxTimeSyncDifferenceMsRef: 500
+  calibrationMethod: 0
+  irlsIterations: 2
+  huberDelta: 0.1
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -1141,7 +1149,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fab0762990e6f41eb886cae2293534c8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  targetProvider: {fileID: 0}
+  targetProvider: {fileID: 730045953}
   logOnUpdate: 1
   printSamples: 0
 --- !u!4 &1071408789
@@ -2312,7 +2320,7 @@ MonoBehaviour:
   useRoll: 1
   updateRequestRotationThresholdDeg: 3
   updateRequestTranslationThresholdMeters: 0.02
-  verboseLogging: 1
+  verboseLogging: 0
   useDebugShader: 0
   logPrefix: '[SplatBaseCorrector]'
 --- !u!1 &1951123224
