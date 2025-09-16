@@ -1,0 +1,66 @@
+#pragma kernel CSMain
+
+// Input textures
+Texture2D<float> _Source;
+Texture2D<float> _Target;
+SamplerState linearClamp;
+
+// Output texture
+RWTexture2D<float> _Output;
+
+// Constants
+float _InvalidValue;
+float2 _TargetSize;
+float2 _SourceSize;
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    uint2 coord = id.xy;
+    
+    // Check bounds
+    if (coord.x >= _SourceSize.x || coord.y >= _SourceSize.y)
+        return;
+    
+    // Sample source
+    float src = _Source[coord];
+    
+    // Calculate target UV coordinates
+    float2 targetUV = (float2(coord) + 0.5) / _SourceSize;
+    float2 targetCoord = targetUV * _TargetSize - 0.5;
+    
+    // Get integer coordinates for bilinear sampling
+    int2 coord00 = int2(floor(targetCoord));
+    int2 coord01 = coord00 + int2(0, 1);
+    int2 coord10 = coord00 + int2(1, 0);
+    int2 coord11 = coord00 + int2(1, 1);
+    
+    // Get fractional part
+    float2 frac = targetCoord - float2(coord00);
+    
+    // Sample target with bounds checking
+    float tgt00 = (coord00.x >= 0 && coord00.x < _TargetSize.x && coord00.y >= 0 && coord00.y < _TargetSize.y) ? _Target[coord00] : _InvalidValue;
+    float tgt01 = (coord01.x >= 0 && coord01.x < _TargetSize.x && coord01.y >= 0 && coord01.y < _TargetSize.y) ? _Target[coord01] : _InvalidValue;
+    float tgt10 = (coord10.x >= 0 && coord10.x < _TargetSize.x && coord10.y >= 0 && coord10.y < _TargetSize.y) ? _Target[coord10] : _InvalidValue;
+    float tgt11 = (coord11.x >= 0 && coord11.x < _TargetSize.x && coord11.y >= 0 && coord11.y < _TargetSize.y) ? _Target[coord11] : _InvalidValue;
+    
+    // Check for invalid values in any of the 4 samples
+    bool hasInvalid = (tgt00 == _InvalidValue) || (tgt01 == _InvalidValue) || (tgt10 == _InvalidValue) || (tgt11 == _InvalidValue);
+    
+    float result;
+    if (src == _InvalidValue || hasInvalid)
+    {
+        result = _InvalidValue;
+    }
+    else
+    {
+        // Bilinear interpolation
+        float tgt = lerp(lerp(tgt00, tgt10, frac.x), lerp(tgt01, tgt11, frac.x), frac.y);
+        
+        // Calculate squared difference
+        float diff = src - tgt;
+        result = diff * diff;
+    }
+    
+    _Output[coord] = result;
+}

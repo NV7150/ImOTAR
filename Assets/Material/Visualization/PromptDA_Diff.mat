@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: TestConf
+  m_Name: PromptDA_Diff
   m_Shader: {fileID: 4800000, guid: e77cef79fbf434d14abf121606993b7c, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -49,7 +49,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MainTex:
-        m_Texture: {fileID: 8400000, guid: 226501e4b6656448082041af8f9d5a4c, type: 2}
+        m_Texture: {fileID: 8400000, guid: 915977b7beaed42158e5e7e95749e7ac, type: 2}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _MetallicGlossMap:
@@ -105,9 +105,9 @@ Material:
     - _Min: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.005
-    - _Percentile25: 0.25
-    - _Percentile50: 0.5
-    - _Percentile75: 0.75
+    - _Percentile25: 3.75
+    - _Percentile50: 7.5
+    - _Percentile75: 11.25
     - _QueueOffset: 0
     - _ReceiveShadows: 1
     - _Smoothness: 0.5
@@ -126,7 +126,7 @@ Material:
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
---- !u!114 &1072916556853417396
+--- !u!114 &1715288421719720023
 MonoBehaviour:
   m_ObjectHideFlags: 11
   m_CorrespondingSourceObject: {fileID: 0}

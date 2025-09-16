@@ -1,0 +1,32 @@
+// Minimal-branching EMA temporal smoothing
+// Inputs: _Input (current), _History (previous output)
+// Output: _Output (next output)
+
+#pragma kernel CSMain
+
+Texture2D<float> _Input;
+Texture2D<float> _History;
+RWTexture2D<float> _Output;
+
+float _Alpha; // [0,1]
+float _InvalidValue; // e.g., -1
+float2 _Size; // width, height
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+	uint2 coord = id.xy;
+	if (coord.x >= (uint)_Size.x || coord.y >= (uint)_Size.y) return;
+
+	float cur = _Input[coord];
+	float prev = _History[coord];
+
+	// valid mask: 1 if cur != invalid, else 0 (avoid heavy branching)
+	// Since invalid is exactly -1, equality is acceptable
+	float valid = cur == _InvalidValue ? 0.0 : 1.0;
+
+	float blended = lerp(prev, cur, _Alpha);
+	float outVal = lerp(prev, blended, valid); // if invalid -> prev, else -> blended
+
+	_Output[coord] = outVal;
+}

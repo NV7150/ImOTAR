@@ -1,0 +1,8 @@
+---
+description: "シェーダはすべてワンパスで"
+globs:
+alwaysApply: true
+---
+To avoid the comute buffer order problem, please do not use any intermidiate RenderTexture.
+Write to output RenderTexture directly as much as possible.
+If you cannot do it, please notify me.

@@ -1,0 +1,6 @@
+---
+description: "ハードコーディングを避ける"
+globs: 
+alwaysApply: true
+---
+DO NOT use any magic numbers or hardcoding. Use constant or SerializedField(When writing Unity) for parameters.
