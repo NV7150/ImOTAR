@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 [DisallowMultipleComponent]
 public class SplatBaseCorrector : FrameProvider {
@@ -53,7 +54,7 @@ public class SplatBaseCorrector : FrameProvider {
     private Splat _currentSplat;
     private Guid _lastCompletedJobId = Guid.Empty;
 
-    private int _propPoints, _propFx, _propFy, _propCx, _propCy, _propW, _propH, _propR, _propT, _propProj, _propRenderMode;
+    private int _propPoints, _propFx, _propFy, _propCx, _propCy, _propW, _propH, _propR, _propT, _propProj, _propRenderMode, _propZTest;
 
     private void OnEnable(){
         if (splatManager == null) throw new NullReferenceException("SplatBaseCorrector: splatManager not assigned");
@@ -78,6 +79,7 @@ public class SplatBaseCorrector : FrameProvider {
         _propT  = Shader.PropertyToID("_t");
         _propProj = Shader.PropertyToID("_Proj");
         _propRenderMode = Shader.PropertyToID("_RenderMode");
+        _propZTest = Shader.PropertyToID("_ZTest");
 
         StartCoroutine(WaitForIntrinsics());
     }
@@ -120,6 +122,8 @@ public class SplatBaseCorrector : FrameProvider {
         if (!IsInitTexture){
             if (outputMeters.format != RenderTextureFormat.RFloat)
                 throw new InvalidOperationException("SplatBaseCorrector: outputMeters must be RFloat");
+            if (outputMeters.depth == 0)
+                throw new InvalidOperationException("SplatBaseCorrector: outputMeters must have a depth buffer (24-bit recommended)");
             outputMeters.wrapMode = TextureWrapMode.Clamp;
             outputMeters.filterMode = FilterMode.Bilinear;
             var active = RenderTexture.active;
@@ -201,6 +205,12 @@ public class SplatBaseCorrector : FrameProvider {
             Debug.Log($"{logPrefix} Scaled intrinsics: fx={scaledIntrinsics.fxPx:F2} fy={scaledIntrinsics.fyPx:F2} cx={scaledIntrinsics.cxPx:F2} cy={scaledIntrinsics.cyPx:F2} res={scaledIntrinsics.width}x{scaledIntrinsics.height}");
         }
         
+        // Set depth test mode according to platform's Z buffer convention
+        // LEqual (4) for normal Z, GreaterEqual (7) for reversed Z
+        // int zTest = SystemInfo.usesReversedZBuffer ? (int)UnityEngine.Rendering.CompareFunction.GreaterEqual : (int)UnityEngine.Rendering.CompareFunction.LessEqual;
+        int zTest = !SystemInfo.usesReversedZBuffer ? (int)UnityEngine.Rendering.CompareFunction.GreaterEqual : (int)UnityEngine.Rendering.CompareFunction.LessEqual;
+        splatTransformMaterial.SetInt(_propZTest, zTest);
+
         splatTransformMaterial.SetBuffer(_propPoints, _currentSplat.PointsBuffer);
         splatTransformMaterial.SetFloat(_propFx, scaledIntrinsics.fxPx);
         splatTransformMaterial.SetFloat(_propFy, scaledIntrinsics.fyPx);
@@ -215,7 +225,13 @@ public class SplatBaseCorrector : FrameProvider {
         // Draw to output
         var active = RenderTexture.active;
         RenderTexture.active = outputMeters;
-        GL.Clear(false, true, new Color(-1f, -1f, -1f, 1f)); // Clear to -1 (holes) before drawing
+        // Clear color and depth explicitly (depth value depends on Z-buffer convention)
+        // float clearDepthValue = SystemInfo.usesReversedZBuffer ? 0f : 1f;
+        float clearDepthValue = !SystemInfo.usesReversedZBuffer ? 0f : 1f;
+        var cb = new CommandBuffer();
+        cb.ClearRenderTarget(true, true, new Color(-1f, -1f, -1f, 1f), clearDepthValue);
+        Graphics.ExecuteCommandBuffer(cb);
+        cb.Release();
         int vertexCount = _currentSplat.Count * 6; // 2 triangles per quad
         if (verboseLogging) Debug.Log($"{logPrefix} Drawing {_currentSplat.Count} points, {vertexCount} vertices");
         

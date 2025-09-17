@@ -1,0 +1,76 @@
+#pragma kernel CSMain
+
+// Inputs
+Texture2D<float> _Static;
+Texture2D<float> _Dynamic;
+
+// Output (project-wide fixed name)
+RWTexture2D<int> output;
+
+// Constants
+float _ThresholdSq;         // m^2
+int2 _StaticSize;           // (w,h)
+int2 _DynamicSize;          // (w,h)
+int _StaticCode;            // mask code for static
+int _DynamicCode;           // mask code for dynamic
+
+[numthreads(16,16,1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    uint2 coord = id.xy;
+    // Bounds guard for non-multiple dispatch sizes
+    if (coord.x >= _StaticSize.x || coord.y >= _StaticSize.y)
+        return;
+
+    // Read static depth (meters)
+    float ds = _Static.Load(int3(coord, 0));
+
+    // Compute bilinear coordinates in dynamic space (UV based)
+    float2 uv = (float2(coord) + 0.5) / (float2)_StaticSize;
+    float2 dynCoord = uv * (float2)_DynamicSize - 0.5;
+
+    int2 baseCoord = (int2)floor(dynCoord);
+    float2 frac = dynCoord - (float2)baseCoord;
+
+    // Neighbor integer coords
+    int2 c00 = baseCoord;
+    int2 c10 = baseCoord + int2(1, 0);
+    int2 c01 = baseCoord + int2(0, 1);
+    int2 c11 = baseCoord + int2(1, 1);
+
+    // Clamp to valid range (branchless edge handling)
+    int2 maxIdx = _DynamicSize - 1;
+    c00 = clamp(c00, int2(0,0), maxIdx);
+    c10 = clamp(c10, int2(0,0), maxIdx);
+    c01 = clamp(c01, int2(0,0), maxIdx);
+    c11 = clamp(c11, int2(0,0), maxIdx);
+
+    // Sample 4 neighbors
+    float d00 = _Dynamic[c00];
+    float d10 = _Dynamic[c10];
+    float d01 = _Dynamic[c01];
+    float d11 = _Dynamic[c11];
+
+    // Bilinear interpolate
+    float dx0 = lerp(d00, d10, frac.x);
+    float dx1 = lerp(d01, d11, frac.x);
+    float dd = lerp(dx0, dx1, frac.y);
+
+    // Validity and difference tests (branchless)
+    float staticInvalid = 1.0 - step(0.0, ds);   // ds < 0 -> 1
+    // Lenient dynamic validity: valid if ANY of 4 neighbors are >= 0
+    float max4 = max(max(d00, d10), max(d01, d11));
+    float dynamicValid  = step(0.0, max4);
+
+    float diff = ds - dd;
+    float d2 = diff * diff;
+    float exceed = step(_ThresholdSq, d2);       // d2 >= th -> 1
+
+    float useDynF = saturate(exceed + staticInvalid) * dynamicValid; // 0 or 1
+    int useDyn = (int)useDynF;
+
+    int mask = useDyn * _DynamicCode + (1 - useDyn) * _StaticCode;
+    output[coord] = mask;
+}
+
+

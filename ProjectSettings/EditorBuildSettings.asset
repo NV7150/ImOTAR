@@ -32,12 +32,15 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/ScheduleTestTranslatGrad.unity
     guid: 5af5bfd59cc9d49508e7c693795b6717
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/StructureBase3.unity
     guid: 7b0beffb8675c4c328789c57e480cc7f
   - enabled: 0
     path: Assets/Scenes/Dav2Stream.unity
     guid: e8391091c0dd74b30a7c1c44bb64833d
+  - enabled: 1
+    path: Assets/Scenes/StructureBase-DiffStich.unity
+    guid: 80ee71b113ecf455aac5a3a119c0a4d7
   - enabled: 0
     path: Assets/Scenes/StructureBase2.unity
     guid: 9e69a545b79324d78b0e95823718f2df

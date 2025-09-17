@@ -38,3 +38,5 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     _Result[id.xy] = float4(normalizedConf, normalizedConf, normalizedConf, 1.0);
 }
 
+
+

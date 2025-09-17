@@ -1,10 +1,13 @@
 Shader "ImOTAR/SplatBaseTransform" {
-    Properties {}
+    Properties {
+        // Depth test mode controlled from C# (default: LEqual)
+        [Enum(CompareFunction)] _ZTest ("ZTest", Int) = 4
+    }
     SubShader {
         Tags { "RenderType"="Opaque" "Queue"="Geometry" }
         Pass {
             Name "SplatPass"
-            ZTest LEqual
+            ZTest [_ZTest]
             ZWrite On
             Cull Off
 

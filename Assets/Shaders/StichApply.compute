@@ -1,0 +1,53 @@
+#pragma kernel CSMain
+
+// Inputs
+Texture2D<float> _Static;
+Texture2D<float> _Dynamic;
+Texture2D<int> _Mask;
+
+// Output (project-wide fixed name)
+RWTexture2D<float> output;
+
+// Constants
+int2 _StaticSize;           // (w,h)
+int2 _DynamicSize;          // (w,h)
+int _StaticCode;
+int _DynamicCode;
+
+[numthreads(16,16,1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    uint2 coord = id.xy;
+    if (coord.x >= _StaticSize.x || coord.y >= _StaticSize.y)
+        return;
+
+    // Read inputs
+    float ds = _Static.Load(int3(coord, 0));
+
+    // Bilinear sample dynamic at static's UV
+    float2 uv = (float2(coord) + 0.5) / (float2)_StaticSize;
+    float2 dynCoord = uv * (float2)_DynamicSize - 0.5;
+    int2 baseCoord = (int2)floor(dynCoord);
+    float2 frac = dynCoord - (float2)baseCoord;
+    int2 maxIdx = _DynamicSize - 1;
+    int2 c00 = clamp(baseCoord, int2(0,0), maxIdx);
+    int2 c10 = clamp(baseCoord + int2(1,0), int2(0,0), maxIdx);
+    int2 c01 = clamp(baseCoord + int2(0,1), int2(0,0), maxIdx);
+    int2 c11 = clamp(baseCoord + int2(1,1), int2(0,0), maxIdx);
+    float d00 = _Dynamic[c00];
+    float d10 = _Dynamic[c10];
+    float d01 = _Dynamic[c01];
+    float d11 = _Dynamic[c11];
+    float dx0 = lerp(d00, d10, frac.x);
+    float dx1 = lerp(d01, d11, frac.x);
+    float dd = lerp(dx0, dx1, frac.y);
+
+    int mk = _Mask[coord];
+
+    // Branchless selector: useDyn = 1 when mk == _DynamicCode, else 0
+    float useDyn = step(0.5, 1.0 - abs((float)(mk - _DynamicCode)));
+    float outDepth = dd * useDyn + ds * (1.0 - useDyn);
+    output[coord] = outDepth;
+}
+
+
