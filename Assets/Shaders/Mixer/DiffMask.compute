@@ -1,0 +1,48 @@
+#pragma kernel CSMain
+
+// Resources
+Texture2D<float> _Diff;
+RWTexture2D<int> output; // R32_SInt
+
+// Parameters
+int2 _OutSize;     // output (static) size
+int2 _DiffSize;    // diff size
+float _DiffTh;     // threshold (>=)
+
+SamplerState samplerLinearClamp
+{
+    Filter = MIN_MAG_MIP_LINEAR;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+static float2 ComputeUv(int2 pixel, int2 size)
+{
+    float2 p = (float2)pixel + 0.5.xx;
+    return p / (float2)size;
+}
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    int2 xy = int2(dispatchThreadId.xy);
+    if (xy.x >= _OutSize.x || xy.y >= _OutSize.y) return;
+
+    // Map output pixel to UV in diff space (ratios are aligned by design)
+    float2 uv = ComputeUv(xy, _OutSize);
+
+    // Bilinear sample with clamp
+    float d = _Diff.SampleLevel(samplerLinearClamp, uv, 0.0);
+
+    // Ternary mask:
+    // d < 0  → -1 (invalid)
+    // d >= _DiffTh → 1 (search)
+    // else   → 0 (not-search)
+    float isInvalid = 1.0 - step(0.0, d);
+    float passTh = step(_DiffTh, d);
+    int mask = (int)passTh - (int)isInvalid;
+
+    output[xy] = mask; // -1, 0, or 1
+}
+
+

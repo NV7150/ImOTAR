@@ -1,0 +1,85 @@
+#pragma kernel CSMain
+
+// Inputs
+Texture2D<float> _Static;      // RFloat depth (meters)
+Texture2D<float> _Dynamic;     // RFloat depth (meters)
+Texture2D<float> _Confidence;  // RFloat [0,1]
+// Use ternary search mask: -1 invalid, 0 not-search, 1 search
+Texture2D<int>   _SearchMask;  // R32_SInt (-1/0/1)
+Texture2D<int>   _EdgeMask;    // R32_SInt (0/1), already dilated
+
+// Outputs
+RWTexture2D<float> output;     // RFloat
+RWTexture2D<int>   debugMask;  // R32_SInt: 0/1/2/3/4 per spec
+
+// Sizes
+int2 _OutSize;
+int2 _DynSize;
+int2 _ConfSize;
+
+// Params
+float _ConfTh;
+float _InvalidVal; // negative
+
+SamplerState samplerLinearClamp
+{
+    Filter = MIN_MAG_MIP_LINEAR;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+static float2 UvOf(int2 xy, int2 size)
+{
+    return ((float2)xy + 0.5.xx) / (float2)size;
+}
+
+[numthreads(8,8,1)]
+void CSMain(uint3 tid : SV_DispatchThreadID)
+{
+    int2 xy = int2(tid.xy);
+    if (xy.x >= _OutSize.x || xy.y >= _OutSize.y) return;
+
+    // Use a single UV derived from the output size for all float inputs
+    float2 uv = UvOf(xy, _OutSize);
+
+    // Sample inputs (bilinear where needed)
+    float zS = _Static.SampleLevel(samplerLinearClamp, uv, 0.0);
+    float zD = _Dynamic.SampleLevel(samplerLinearClamp, uv, 0.0);
+    float conf = _Confidence.SampleLevel(samplerLinearClamp, uv, 0.0);
+    int searchM = _SearchMask[xy]; // same size as output
+    int edgeM = _EdgeMask[xy];     // same size as output
+
+    // Rules (eq-inclusive):
+    // 1) diff < 0 -> dynamic (debug=4)
+    int isInvalidDiff = (searchM < 0) ? 1 : 0;
+
+    // 2..4) searchMask==1 && conf>=th && edgeM==0 -> dynamic (debug=3)
+    int passSearch = (searchM == 1) ? 1 : 0;
+    int passConf = (conf >= _ConfTh) ? 1 : 0;
+    int passEdge = (edgeM == 0) ? 1 : 0;
+    int passDyn = passSearch & passConf & passEdge;
+
+    // Priority: invalidDiff first, then passDyn, else static
+    int chooseDynamic = (isInvalidDiff == 1) ? 1 : passDyn;
+
+    // Depth pick with invalid handling (no fallback):
+    // If chosen depth is <0, write -1.
+    float chosen = chooseDynamic == 1 ? zD : zS;
+    float outDepth = (chosen < 0.0) ? _InvalidVal : chosen;
+    output[xy] = outDepth;
+
+    // Debug codes: 4 invalid-diff dynamic, 3 normal dynamic, 0/1/2 static reasons
+    int dbg;
+    if (isInvalidDiff == 1) {
+        dbg = 4; // dynamic by invalid diff
+    } else if (passDyn == 1) {
+        dbg = 3; // dynamic
+    } else {
+        // Determine first failing reason for static: prefer diff->conf->edge mapping to 0/1/2
+        // We know passSearch==0 or passConf==0 or passEdge==0
+        dbg = (passSearch == 0) ? 0 : ((passConf == 0) ? 1 : 2);
+    }
+    debugMask[xy] = dbg;
+}
+
+

@@ -39,6 +39,12 @@ EditorBuildSettings:
     path: Assets/Scenes/Dav2Stream.unity
     guid: e8391091c0dd74b30a7c1c44bb64833d
   - enabled: 1
+    path: Assets/Scenes/StructureBase-Simple.unity
+    guid: 5df02d7f731a14fd7a61ec0c6d8ffce9
+  - enabled: 0
+    path: Assets/Scenes/StructureBase-DiffStich_Mixer.unity
+    guid: 90347b8ff55de4967bc3bf70c708615b
+  - enabled: 0
     path: Assets/Scenes/StructureBase-DiffStich.unity
     guid: 80ee71b113ecf455aac5a3a119c0a4d7
   - enabled: 0

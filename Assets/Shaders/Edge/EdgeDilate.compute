@@ -1,0 +1,31 @@
+#pragma kernel CSMain
+
+Texture2D<int> _Input;     // R32_SInt 0/1
+RWTexture2D<int> output;   // R32_SInt 0/1
+
+int2 _OutSize;
+int _Radius; // Chebyshev radius
+
+[numthreads(8,8,1)]
+void CSMain(uint3 tid : SV_DispatchThreadID)
+{
+    int2 xy = int2(tid.xy);
+    if (xy.x >= _OutSize.x || xy.y >= _OutSize.y) return;
+
+    int maxv = 0;
+    int r = _Radius;
+    // Chebyshev neighborhood: square window (2r+1)^2
+    for (int dy = -r; dy <= r; ++dy)
+    {
+        int yy = clamp(xy.y + dy, 0, _OutSize.y - 1);
+        for (int dx = -r; dx <= r; ++dx)
+        {
+            int xx = clamp(xy.x + dx, 0, _OutSize.x - 1);
+            int v = _Input[int2(xx, yy)];
+            maxv = (v > maxv) ? v : maxv;
+        }
+    }
+    output[xy] = maxv;
+}
+
+

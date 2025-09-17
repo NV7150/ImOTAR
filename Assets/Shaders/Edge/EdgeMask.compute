@@ -1,0 +1,35 @@
+#pragma kernel CSMain
+
+Texture2D<float> _Edge;   // RFloat 0..1
+RWTexture2D<int> output;  // R32_SInt 0/1
+
+int2 _OutSize;
+int2 _EdgeSize;
+float _EdgeTh;
+
+SamplerState samplerLinearClamp
+{
+    Filter = MIN_MAG_MIP_LINEAR;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+static float2 Uv(int2 p, int2 sz)
+{
+    return ((float2)p + 0.5.xx) / (float2)sz;
+}
+
+[numthreads(8,8,1)]
+void CSMain(uint3 tid : SV_DispatchThreadID)
+{
+    int2 xy = int2(tid.xy);
+    if (xy.x >= _OutSize.x || xy.y >= _OutSize.y) return;
+
+    float2 uv = Uv(xy, _OutSize);
+    float v = _Edge.SampleLevel(samplerLinearClamp, uv, 0.0);
+
+    int m = (int)step(_EdgeTh, v); // >= threshold
+    output[xy] = m;
+}
+
+

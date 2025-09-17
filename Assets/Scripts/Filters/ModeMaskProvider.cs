@@ -19,6 +19,7 @@ public sealed class ModeMaskProvider : FrameProvider
     private static readonly int PropSize = Shader.PropertyToID("_Size");
     private static readonly int PropKernelSize = Shader.PropertyToID("_KernelSize");
     private static readonly int PropTieRule = Shader.PropertyToID("_TieRule");
+    private static readonly int PropIgnoreNegOne = Shader.PropertyToID("_IgnoreNegOne");
 
     public enum TieRule
     {
@@ -34,6 +35,7 @@ public sealed class ModeMaskProvider : FrameProvider
     [Tooltip("Odd window size (>=3). Must be <= shader MAX.")]
     [SerializeField] private int windowSize = 3;
     [SerializeField] private TieRule tieRule = TieRule.Center;
+    [SerializeField] private bool ignoreNegOne = true;
 
     [Header("Shader/Output")]
     [SerializeField] private ComputeShader shader;   // Assets/Shaders/MaskMode.compute
@@ -147,6 +149,7 @@ public sealed class ModeMaskProvider : FrameProvider
         shader.SetInts(PropSize, sTex.width, sTex.height);
         shader.SetInt(PropKernelSize, windowSize);
         shader.SetInt(PropTieRule, (int)tieRule);
+        shader.SetInt(PropIgnoreNegOne, ignoreNegOne ? 1 : 0);
 
         int tgx = Mathf.CeilToInt(sTex.width / (float)threadX);
         int tgy = Mathf.CeilToInt(sTex.height / (float)threadY);
