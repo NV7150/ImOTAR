@@ -1,0 +1,117 @@
+#pragma kernel CSMain
+
+// Integer mask mode filter (no intermediate RT)
+// Platform: HLSL for Unity Compute (Metal, Vulkan, etc.)
+
+#define THREAD_X 16
+#define THREAD_Y 16
+
+// Upper bound for window size (must be odd). Keep modest for per-thread arrays.
+#define MAX_KERNEL 15
+#define MAX_SAMPLES (MAX_KERNEL * MAX_KERNEL)
+
+RWTexture2D<int> output;
+Texture2D<int> _Input;
+
+int2 _Size;
+int   _KernelSize;   // odd, >=3, <= MAX_KERNEL
+int   _TieRule;      // 0: Center, 1: Smallest, 2: Largest
+
+[numthreads(THREAD_X, THREAD_Y, 1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_Size.x || id.y >= (uint)_Size.y) return;
+
+    const int2 coord = int2(id.xy);
+    const int centerVal = _Input.Load(int3(coord, 0));
+
+    const int k = _KernelSize;
+    const int r = (k - 1) >> 1;
+
+    // Local arrays per-thread
+    int vals[MAX_SAMPLES];
+    int cnts[MAX_SAMPLES];
+    int uniq = 0;
+
+    // Gather neighborhood and build unique list with counts
+    // Note: Loops are data-dependent but bounded by MAX_KERNEL.
+    for (int dy = -r; dy <= r; ++dy)
+    {
+        int sy = clamp(coord.y + dy, 0, _Size.y - 1);
+        for (int dx = -r; dx <= r; ++dx)
+        {
+            int sx = clamp(coord.x + dx, 0, _Size.x - 1);
+            int sv = _Input.Load(int3(int2(sx, sy), 0));
+
+            int found = 0;
+            // Update counts if exists
+            [loop]
+            for (int j = 0; j < uniq; ++j)
+            {
+                // branchless equality accumulation
+                int eq = (vals[j] == sv) ? 1 : 0;
+                cnts[j] += eq;
+                found |= eq;
+            }
+
+            // Append new unique value
+            if (found == 0)
+            {
+                vals[uniq] = sv;
+                cnts[uniq] = 1;
+                uniq++;
+            }
+        }
+    }
+
+    // Select mode with tie rule
+    int bestIdx = 0;
+    int bestCnt = -2147483647; // INT_MIN + 1
+
+    // Precompute for tie decisions
+    [loop]
+    for (int j = 0; j < uniq; ++j)
+    {
+        const int c = cnts[j];
+        const int v = vals[j];
+
+        // primary: higher count wins
+        const bool better = (c > bestCnt);
+
+        // tie: apply rule
+        bool tie = (c == bestCnt);
+        bool prefer = better;
+
+        if (!prefer && tie)
+        {
+            if (_TieRule == 0) // Center
+            {
+                // Prefer value equal to center
+                prefer = (v == centerVal);
+                if (!prefer)
+                {
+                    // fallback: smallest among ties to keep deterministic
+                    prefer = (v < vals[bestIdx]);
+                }
+            }
+            else if (_TieRule == 1) // Smallest
+            {
+                prefer = (v < vals[bestIdx]);
+            }
+            else // Largest
+            {
+                prefer = (v > vals[bestIdx]);
+            }
+        }
+
+        if (prefer)
+        {
+            bestIdx = j;
+            bestCnt = c;
+        }
+    }
+
+    output[coord] = vals[bestIdx];
+}
+
+
