@@ -1,0 +1,58 @@
+#pragma kernel CSMain_Erode_Box
+#pragma kernel CSMain_Dilate_Box
+
+// Resources (R32Float)
+Texture2D<float> _Input;
+RWTexture2D<float> _Output;
+
+// Parameters
+int2 _OutSize;     // width, height
+int _Radius;       // >= 1
+float _InvalidVal; // negative; propagated naturally by min/max
+
+// Thread layout
+[numthreads(8,8,1)]
+void CSMain_Erode_Box(uint3 tid : SV_DispatchThreadID)
+{
+    int2 xy = int2(tid.xy);
+    if (xy.x >= _OutSize.x || xy.y >= _OutSize.y) return;
+
+    // Box erosion (min over (2r+1)^2 neighborhood)
+    float acc = _Input[xy];
+    int r = _Radius;
+    for (int dy = -r; dy <= r; ++dy)
+    {
+        int yy = clamp(xy.y + dy, 0, _OutSize.y - 1);
+        for (int dx = -r; dx <= r; ++dx)
+        {
+            int xx = clamp(xy.x + dx, 0, _OutSize.x - 1);
+            float v = _Input[int2(xx, yy)];
+            acc = (v < acc) ? v : acc;
+        }
+    }
+    _Output[xy] = acc;
+}
+
+[numthreads(8,8,1)]
+void CSMain_Dilate_Box(uint3 tid : SV_DispatchThreadID)
+{
+    int2 xy = int2(tid.xy);
+    if (xy.x >= _OutSize.x || xy.y >= _OutSize.y) return;
+
+    // Box dilation (max over (2r+1)^2 neighborhood)
+    float acc = _Input[xy];
+    int r = _Radius;
+    for (int dy = -r; dy <= r; ++dy)
+    {
+        int yy = clamp(xy.y + dy, 0, _OutSize.y - 1);
+        for (int dx = -r; dx <= r; ++dx)
+        {
+            int xx = clamp(xy.x + dx, 0, _OutSize.x - 1);
+            float v = _Input[int2(xx, yy)];
+            acc = (v > acc) ? v : acc;
+        }
+    }
+    _Output[xy] = acc;
+}
+
+

@@ -39,6 +39,9 @@ EditorBuildSettings:
     path: Assets/Scenes/Dav2Stream.unity
     guid: e8391091c0dd74b30a7c1c44bb64833d
   - enabled: 1
+    path: Assets/Scenes/StructureBase-Simple4Eval.unity
+    guid: 46cbfda396cb0460b9fc46aa730476cb
+  - enabled: 0
     path: Assets/Scenes/StructureBase-Simple.unity
     guid: 5df02d7f731a14fd7a61ec0c6d8ffce9
   - enabled: 0
