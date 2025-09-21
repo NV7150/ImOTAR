@@ -1,0 +1,35 @@
+// Depth clipping compute shader
+// Inputs:  _Src (Texture2D<float>, meters)
+// Output:  _Dst (RWTexture2D<float>) where values >= _ClipDist are set to -1
+// Notes:   Branchless threshold via step/lerp. Bounds and NaN/Inf guards kept minimal.
+
+#pragma kernel Clip
+
+Texture2D<float> _Src;
+RWTexture2D<float> _Dst;
+
+cbuffer Params
+{
+    float _ClipDist;
+};
+
+[numthreads(8,8,1)]
+void Clip(uint3 id : SV_DispatchThreadID)
+{
+    uint2 uv = id.xy;
+    uint w, h;
+    _Dst.GetDimensions(w, h);
+    if (uv.x >= w || uv.y >= h) return;
+
+    float v = _Src.Load(int3(uv, 0));
+
+    // Mask for invalid numbers (NaN/Inf). If not supported, fallback to -1 output via this mask.
+    bool invalid = (isnan(v) || isinf(v));
+    float invalidMask = invalid ? 1.0 : 0.0;
+
+    float clipMask = step(_ClipDist, v);
+    float mask = max(clipMask, invalidMask);
+
+    float outv = lerp(v, -1.0, mask);
+    _Dst[uv] = outv;
+}

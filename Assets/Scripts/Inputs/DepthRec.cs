@@ -82,11 +82,9 @@ public class DepthRec : FrameProvider
     {
         if (targetRT == null) return;
 
-        // AF 6.1+: TryGetEnvironmentDepthTexture()を使用
-        if (!occlusion.TryGetEnvironmentDepthTexture(out var depthTex))
-        {
-            return;
-        }
+        // AF 4.x: 環境深度テクスチャ（GPU上の Texture2D）
+        var depthTex = occlusion.environmentDepthTexture; // null の可能性あり
+        if (depthTex == null) return;
 
         if (cmd == null) cmd = new CommandBuffer { name = "ARKit EnvironmentDepth → RT (immediate blit)" };
         else cmd.Clear();

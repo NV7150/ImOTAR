@@ -106,13 +106,9 @@ public class DepthConfRec : FrameProvider
 #if UNITY_IOS
         if (targetRT == null || tempRT == null) return;
 
-        // AF 6.1+: TryGetEnvironmentDepthConfidenceTexture()を使用
-        if (!occlusion.TryGetEnvironmentDepthConfidenceTexture(out var depthConfTexRaw))
-        {
-            return;
-        }
-
-        var depthConfTex = depthConfTexRaw.texture;
+        // AF 4.x: 環境深度信頼度テクスチャ（GPU上の Texture2D）
+        var depthConfTex = occlusion.environmentDepthConfidenceTexture; // null の可能性あり
+        if (depthConfTex == null) return;
 
         // Step 1: Compute Shader で Confidence を正規化 (0/1/2 → 0/0.5/1)
         int kernelIndex = confidenceNormalizeCS.FindKernel("CSMain");
