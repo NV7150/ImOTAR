@@ -1,0 +1,32 @@
+#pragma kernel CSMain
+
+// RFloat input: holes marked by value < 0
+Texture2D<float> _Tex;
+RWStructuredBuffer<uint> _Out; // [invalidCount, total]
+
+int _Width;
+int _Height;
+
+[numthreads(16,16,1)]
+void CSMain (uint3 id : SV_DispatchThreadID){
+    if (id.x >= (uint)_Width || id.y >= (uint)_Height) return;
+
+    uint idx = id.y * (uint)_Width + id.x;
+    // Load depth/metric value
+    float v = _Tex.Load(int3(int2(id.xy), 0));
+
+    // invalid if v < 0 or not finite
+    // use step/saturate to avoid dynamic if branches
+    float m_neg = step(v, -1e-35);            // 1 if v <= ~0 (treat 0 as valid, so use tiny negative threshold)
+    float m_nan = 1.0 - step(0.0, v - v);     // v!=v -> NaN => m_nan=1
+    float m_inf = step(3.402823466e+38, abs(v)); // extremely large -> treat as invalid
+    float m_inv = saturate(m_neg + m_nan + m_inf);
+
+    // accumulate
+    uint inc = (uint)round(m_inv);
+    InterlockedAdd(_Out[0], inc);
+
+    // Optionally also accumulate total once per thread; here we rely on CPU recompute total = W*H
+}
+
+
