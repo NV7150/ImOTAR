@@ -24,7 +24,6 @@ public sealed class OpenFilterProvider : FrameProvider {
 	[SerializeField] private FrameProvider inputProvider;
 
 	[SerializeField] private int radius = 1; // Serialized parameter; must be >=1
-	[SerializeField] private double timeToleranceMs = 16.0; // Serialized as requested
 	[SerializeField] private float invalidVal = -1f; // Serialized invalid marker
 
 	[SerializeField] private RenderTexture output; // Must be assigned via Inspector
@@ -59,7 +58,6 @@ public sealed class OpenFilterProvider : FrameProvider {
 		if (inputProvider == null) throw new InvalidOperationException("Input FrameProvider is not assigned.");
 		if (output == null) throw new InvalidOperationException("Output RenderTexture must be assigned via Inspector.");
 		if (radius < 1) throw new InvalidOperationException("radius must be >= 1.");
-		if (timeToleranceMs < 0) throw new InvalidOperationException("timeToleranceMs must be non-negative.");
 	}
 
 	private void ResolveKernelsAndThreadGroupSizes() {
@@ -87,6 +85,7 @@ public sealed class OpenFilterProvider : FrameProvider {
 	private void OnInputUpdated(RenderTexture _) {
 		TryRun();
 	}
+
 
 	private void TryEnsureTargets() {
 		var inTex = inputProvider.FrameTex;
@@ -206,7 +205,6 @@ public sealed class OpenFilterProvider : FrameProvider {
 
 	private void OnValidate() {
 		if (radius < 1) radius = 1;
-		if (timeToleranceMs < 0) timeToleranceMs = 0;
 	}
 }
 

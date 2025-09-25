@@ -1,0 +1,157 @@
+// SplatRadiusFilter.compute
+// Purpose: Radius-based neighbor density filtering on GPU for Splat points
+// Inputs: StructuredBuffer<float4> _PointsIn (xyz position in meters, w radius)
+// Outputs: RWStructuredBuffer<float4> _PointsOut (subset copy of _PointsIn)
+// Notes:
+// - No intermediate RenderTexture is used (buffers only)
+// - Minimize branches where possible using step-based masks
+// - Linked-list hashing per cell to accelerate neighbor queries
+
+#pragma kernel KInitHeads
+#pragma kernel KBuildLists
+#pragma kernel KCountNeighbors
+#pragma kernel KCompact
+
+// Thread group size constant (avoid magic numbers)
+static const uint THREAD_GROUP_SIZE = 256;
+
+// Hash multipliers (named constants)
+static const int HASH_MUL_X = 73856093;  // distinct large primes
+static const int HASH_MUL_Y = 19349663;
+static const int HASH_MUL_Z = 83492791;
+
+StructuredBuffer<float4> _PointsIn;            // xyz: position (m), w: radius (m)
+RWStructuredBuffer<float4> _PointsOut;         // filtered points
+
+RWStructuredBuffer<int>  _CellHead;            // size: _HashSize, initialized to -1
+RWStructuredBuffer<int>  _NextIndex;           // size: _Count, per-point next index in bucket list
+RWStructuredBuffer<uint> _Mask;                // size: _Count, 0/1 keep mask
+RWStructuredBuffer<uint> _Counter;             // size: 1, append-like counter for compaction
+
+uint _Count;                                   // number of input points
+uint _HashSize;                                // power-of-two size
+uint _HashMask;                                // _HashSize - 1
+float3 _GridOrigin;                            // origin for quantization
+float _CellSize;                               // usually equals neighbor radius
+float _Radius;                                 // neighbor radius (meters)
+float _Radius2;                                // squared neighbor radius
+int _MinNeighbors;                             // inclusive lower bound
+int _MaxNeighbors;                             // inclusive upper bound (set to large when disabled)
+
+// Helpers
+int3 quantize_cell(float3 p)
+{
+    float3 q = (p - _GridOrigin) / _CellSize;
+    return (int3)floor(q);
+}
+
+uint hash_cell(int3 v)
+{
+    int h = v.x * HASH_MUL_X ^ v.y * HASH_MUL_Y ^ v.z * HASH_MUL_Z;
+    return (uint)h & _HashMask;
+}
+
+[numthreads(THREAD_GROUP_SIZE, 1, 1)]
+void KInitHeads(uint3 tid : SV_DispatchThreadID)
+{
+    uint i = tid.x;
+    if (i < _HashSize)
+    {
+        _CellHead[i] = -1;
+    }
+    // Note: _Counter is reset on CPU to avoid extra kernels
+}
+
+[numthreads(THREAD_GROUP_SIZE, 1, 1)]
+void KBuildLists(uint3 tid : SV_DispatchThreadID)
+{
+    uint i = tid.x;
+    if (i >= _Count) return;
+
+    float3 p = _PointsIn[i].xyz;
+    int3 v = quantize_cell(p);
+    uint h = hash_cell(v);
+
+    int oldHead;
+    InterlockedExchange(_CellHead[h], (int)i, oldHead);
+    _NextIndex[i] = oldHead; // -1 for tail set in init
+}
+
+[numthreads(THREAD_GROUP_SIZE, 1, 1)]
+void KCountNeighbors(uint3 tid : SV_DispatchThreadID)
+{
+    uint i = tid.x;
+    if (i >= _Count) return;
+
+    float4 pi4 = _PointsIn[i];
+    float3 pi = pi4.xyz;
+    int3 v = quantize_cell(pi);
+
+    uint cnt = 0u;
+
+    // Iterate neighbor 3x3x3 cells; use arithmetic masks to minimize branches
+    [unroll]
+    for (int dz = -1; dz <= 1; ++dz)
+    {
+        [unroll]
+        for (int dy = -1; dy <= 1; ++dy)
+        {
+            [unroll]
+            for (int dx = -1; dx <= 1; ++dx)
+            {
+                int3 vc = v + int3(dx, dy, dz);
+                uint h = hash_cell(vc);
+
+                int idx = _CellHead[h];
+                // traverse bucket
+                while (idx != -1)
+                {
+                    float4 pj4 = _PointsIn[idx];
+                    float3 pj = pj4.xyz;
+
+                    // Check cell equality (reject hash collisions):
+                    int3 vj = quantize_cell(pj);
+                    int3 dcell = vj - vc;
+                    // is same cell if all components zero
+                    float sameCell = 1.0 - step(0.5, abs((float)dcell.x) + abs((float)dcell.y) + abs((float)dcell.z));
+
+                    // Distance check (squared)
+                    float3 d = pj - pi;
+                    float dist2 = dot(d, d);
+                    float within = 1.0 - step(_Radius2, dist2); // 1 if dist2 < Radius2
+
+                    // Exclude self
+                    float neq = step(0.5, abs((float)(idx - (int)i)));
+
+                    float add = sameCell * within * neq;
+                    cnt += (uint)(add + 0.5);
+
+                    idx = _NextIndex[idx];
+                }
+            }
+        }
+    }
+
+    // Acceptance: cnt in [MinNeighbors, MaxNeighbors]
+    float accLo = step((float)_MinNeighbors, (float)cnt);
+    float accHi = step((float)cnt, (float)_MaxNeighbors);
+    uint keep = (uint)(accLo * accHi + 0.5);
+    _Mask[i] = keep;
+}
+
+[numthreads(THREAD_GROUP_SIZE, 1, 1)]
+void KCompact(uint3 tid : SV_DispatchThreadID)
+{
+    uint i = tid.x;
+    if (i >= _Count) return;
+
+    uint keep = _Mask[i];
+    if (keep == 0u) return;
+
+    uint baseIndex;
+    InterlockedAdd(_Counter[0], keep, baseIndex);
+    // keep is 1 when here
+    _PointsOut[baseIndex] = _PointsIn[i];
+}
+
+
