@@ -25,9 +25,9 @@ public class StateEstimateManager : AsyncFrameProvider {
         if (processor == null) throw new NullReferenceException("StateEstimateManager: processor not assigned");
         if (state == null) throw new NullReferenceException("StateEstimateManager: state not assigned");
         processor.SetupInputSubscriptions();
-        state.TryBirth += TryBirth;
-        state.OnBirth += OnBirth;
-        state.OnDead  += OnDead; // we keep result, no events fired (we won't TickUp here)
+        state.TryGenerate += TryBirth;
+        state.OnGenerate += OnBirth;
+        state.OnDiscard  += OnDead; // we keep result, no events fired (we won't TickUp here)
 
         if (processor.ResultRT != null) {
             IsInitTexture = true;
@@ -36,9 +36,9 @@ public class StateEstimateManager : AsyncFrameProvider {
     }
 
     private void OnDisable(){
-        state.TryBirth -= TryBirth;
-        state.OnBirth -= OnBirth;
-        state.OnDead  -= OnDead;
+        state.TryGenerate -= TryBirth;
+        state.OnGenerate -= OnBirth;
+        state.OnDiscard  -= OnDead;
     }
 
     private bool TryBirth(){
@@ -57,7 +57,7 @@ public class StateEstimateManager : AsyncFrameProvider {
             ProcessStart(startedId);
             if (logVerbose) Debug.Log($"{logPrefix} Begin OK: jobId={startedId}");
         } else {
-            state.BirthFailed();
+            state.GenerateFailed();
         }
     }
 
@@ -91,7 +91,7 @@ public class StateEstimateManager : AsyncFrameProvider {
                 _lastEndedJobId = finalizedId;
                 // Transition to ALIVE
                 if (logVerbose) Debug.Log($"{logPrefix} Calling state.BirthEnd() for jobId={finalizedId}");
-                state.BirthEnd();
+                state.GenerateEnd();
             }
         } else if (logVerbose) {
             // Detail why not finalized

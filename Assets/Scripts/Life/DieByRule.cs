@@ -61,8 +61,8 @@ public class DieByRule : MonoBehaviour {
         _propH   = Shader.PropertyToID("_Height");
         _propOut = Shader.PropertyToID("_Out");
 
-        state.OnBirthEnd += OnBirthEnd;
-        state.OnDead     += OnDeadInternal;
+        state.OnGenerateEnd += OnBirthEnd;
+        state.OnDiscard     += OnDeadInternal;
 
         AllocateCounter();
         _emaUnknownRatio = 0f;
@@ -73,8 +73,8 @@ public class DieByRule : MonoBehaviour {
     }
 
     private void OnDisable(){
-        state.OnBirthEnd -= OnBirthEnd;
-        state.OnDead     -= OnDeadInternal;
+        state.OnGenerateEnd -= OnBirthEnd;
+        state.OnDiscard     -= OnDeadInternal;
         ReleaseCounter();
     }
 
@@ -105,7 +105,7 @@ public class DieByRule : MonoBehaviour {
     }
 
     private void Update(){
-        if (state.CurrState != State.ALIVE) return;
+        if (state.CurrState != State.ACTIVE) return;
 
         // 1) Motion displacement vs baseline (poseDiff generation-based)
         if (poseDiff.Generation != Guid.Empty){
@@ -114,7 +114,7 @@ public class DieByRule : MonoBehaviour {
             bool dieMotion = (ang >= rotDieDeg) || (dist >= posDieMeters);
             if (dieMotion){
                 if (logVerbose) Debug.Log($"{logPrefix} DIE by motion: ang={ang:F2} deg, dist={dist:F3} m");
-                state.Die();
+                state.Discard();
                 return;
             }
         }
@@ -141,7 +141,7 @@ public class DieByRule : MonoBehaviour {
 
                 if (_emaUnknownRatio >= unknownRatioThresh){
                     if (logVerbose) Debug.Log($"{logPrefix} DIE by coverage: ratio={_emaUnknownRatio:F3}");
-                    state.Die();
+                    state.Discard();
                     return;
                 }
             }

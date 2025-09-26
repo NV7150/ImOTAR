@@ -42,7 +42,7 @@ public class StateHud : MonoBehaviour {
         _sb.Append("State: ").Append(state.CurrState.ToString()).Append('\n');
 
         // Birth
-        _sb.Append("Birth: ");
+        _sb.Append("Generate: ");
         _sb.Append("rotVel=").Append(birth.EmaRotVel.ToString("F" + precisionAngle));
         _sb.Append("/thr=").Append(birth.RotVelStableDegPerSec.ToString("F" + precisionAngle));
         _sb.Append(", posVel=").Append(birth.EmaPosVel.ToString("F" + precisionVel));
@@ -57,7 +57,7 @@ public class StateHud : MonoBehaviour {
             ang = Quaternion.Angle(Quaternion.identity, pose.Rotation);
             dist = pose.Translation.magnitude;
         }
-        _sb.Append("Die: motion ang=").Append(ang.ToString("F" + precisionAngle))
+        _sb.Append("Discard: motion ang=").Append(ang.ToString("F" + precisionAngle))
            .Append("/thr=").Append(die.RotDieDeg.ToString("F" + precisionAngle))
            .Append(", dist=").Append(dist.ToString("F" + precisionDist))
            .Append("/thr=").Append(die.PosDieMeters.ToString("F" + precisionDist)).Append('\n');

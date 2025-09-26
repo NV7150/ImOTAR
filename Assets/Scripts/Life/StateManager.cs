@@ -2,59 +2,59 @@ using UnityEngine;
 using System;
 
 public enum State {
-    DEAD,
-    BIRTHING,
-    ALIVE
+    INACTIVE,
+    GENERATING,
+    ACTIVE
 }
 
 public  class StateManager : MonoBehaviour {
     public State CurrState { get; private set; }
 
-    public void Birth(){
-        if(CurrState != State.DEAD)
+    public void Generate(){
+        if(CurrState != State.INACTIVE)
             return;
-        if(!AllTrue(TryBirth))
+        if(!AllTrue(TryGenerate))
             return;
-        CurrState = State.BIRTHING;
-        OnBirth?.Invoke();
+        CurrState = State.GENERATING;
+        OnGenerate?.Invoke();
     }
 
-    public void BirthEnd(){
-        if(CurrState != State.BIRTHING)
+    public void GenerateEnd(){
+        if(CurrState != State.GENERATING)
             return;
-        if(!AllTrue(TryBirthEnd))
+        if(!AllTrue(TryGenerateEnd))
             return;
-        CurrState = State.ALIVE;
-        OnBirthEnd?.Invoke();
+        CurrState = State.ACTIVE;
+        OnGenerateEnd?.Invoke();
     }
 
-    public void BirthFailed(){
-        if(CurrState != State.BIRTHING)
+    public void GenerateFailed(){
+        if(CurrState != State.GENERATING)
             return;
-        if(!AllTrue(TryDead))
+        if(!AllTrue(TryDiscard))
             throw new InvalidOperationException("Birth Failed, but cannot die");
-        CurrState = State.DEAD;
-        OnDead?.Invoke();
+        CurrState = State.INACTIVE;
+        OnDiscard?.Invoke();
     }
 
-    public void Die(){
-        if(CurrState != State.ALIVE)
+    public void Discard(){
+        if(CurrState != State.ACTIVE)
             return;
-        if(!AllTrue(TryDead))
+        if(!AllTrue(TryDiscard))
             return;
-        CurrState = State.DEAD;
-        OnDead?.Invoke();
+        CurrState = State.INACTIVE;
+        OnDiscard?.Invoke();
     }
 
-    public event Action OnBirth;
+    public event Action OnGenerate;
 
-    public event Func<bool> TryBirth;
+    public event Func<bool> TryGenerate;
 
-    public event Action OnBirthEnd;
-    public event Func<bool> TryBirthEnd;
+    public event Action OnGenerateEnd;
+    public event Func<bool> TryGenerateEnd;
 
-    public event Action OnDead;
-    public event Func<bool> TryDead;
+    public event Action OnDiscard;
+    public event Func<bool> TryDiscard;
 
     private static bool AllTrue(Func<bool> handlers){
         if(handlers == null)

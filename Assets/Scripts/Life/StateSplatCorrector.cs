@@ -137,7 +137,7 @@ public class StateSplatCorrector : FrameProvider {
 
     private void LateUpdate(){
         // State gate: only run when ALIVE to avoid any overhead in other states
-        if (state.CurrState != State.ALIVE) return;
+        if (state.CurrState != State.ACTIVE) return;
 
         if (!IsInitTexture){
             if (verboseLogging) Debug.Log($"{logPrefix} Early return: texture not initialized");

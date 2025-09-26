@@ -56,7 +56,7 @@ public class StateDepthStich : FrameProvider
     }
 
     private void OnCorrectedUpdated(RenderTexture rt){
-        if (state.CurrState != State.ALIVE){
+        if (state.CurrState != State.ACTIVE){
             // Ignore corrected when not alive
             return;
         }
@@ -67,7 +67,7 @@ public class StateDepthStich : FrameProvider
     }
 
     private void OnImmediateUpdated(RenderTexture rt){
-        if (state.CurrState == State.ALIVE){
+        if (state.CurrState == State.ACTIVE){
             _latestImmediateRT = rt;
             _latestImmediateTs = immediate.TimeStamp;
             _hasImmediate = true;
@@ -104,7 +104,7 @@ public class StateDepthStich : FrameProvider
     }
 
     private void TryStitchIfReady(){
-        if (state.CurrState != State.ALIVE) return;
+        if (state.CurrState != State.ACTIVE) return;
         if (!_hasCorrected || !_hasImmediate) return;
         if (_latestCorrectedRT == null || _latestImmediateRT == null) return;
         if (!_latestCorrectedRT.IsCreated() || !_latestImmediateRT.IsCreated()) return;

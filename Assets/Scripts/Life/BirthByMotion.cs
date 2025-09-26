@@ -45,7 +45,7 @@ public class BirthByMotion : MonoBehaviour {
     }
 
     private void Update(){
-        if (state.CurrState != State.DEAD) {
+        if (state.CurrState != State.INACTIVE) {
             // Only monitors for BIRTH when DEAD
             _hasPrev = false; // reset to avoid large deltas across state changes
             _stableAccumMs = 0f;
@@ -89,7 +89,7 @@ public class BirthByMotion : MonoBehaviour {
 
         if (_stableAccumMs >= stableTimeMs){
             if (logVerbose) Debug.Log($"{logPrefix} Birth: rotVel={_emaRotVel:F3} deg/s, posVel={_emaPosVel:F4} m/s");
-            state.Birth();
+            state.Generate();
             // reset to avoid immediate re-triggering
             _stableAccumMs = 0f;
             _hasPrev = false;
