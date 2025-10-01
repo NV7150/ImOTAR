@@ -713,6 +713,7 @@ RectTransform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 226227253}
+  - {fileID: 996310577}
   - {fileID: 2105656095}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -965,7 +966,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   provider: {fileID: 730045953}
   motion: {fileID: 230356828}
-  logVerbose: 1
+  logVerbose: 0
   logPrefix: '[SimpleMotionDiff]'
 --- !u!4 &535656708
 Transform:
@@ -1233,20 +1234,21 @@ MonoBehaviour:
   m_GameObject: {fileID: 758036905}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 45b33ce42eb844125909bb689e778b9c, type: 3}
+  m_Script: {fileID: 11500000, guid: 5520d4bdaee054f7dbbc3c40a5e95364, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   outputRT: {fileID: 8400000, guid: 9d97e67b28af742548c70a1e444e90c8, type: 2}
   promptDaOnnx: {fileID: 5022602860645237092, guid: 14513aeec010e4204b4d003a75122350, type: 3}
   onnxWidth: 896
   onnxHeight: 672
+  reverseInputWH: 0
   backendType: 256
   completionFrameDelay: 1
   verboseLogging: 1
-  logPrefix: '[PromptDA-ITER]'
+  logPrefix: '[PromptDA-ITER(NLB)]'
   cameraRec: {fileID: 1969467336}
   depthRec: {fileID: 1317386197}
-  maxTimeSyncDifferenceMs: 500
+  maxTimeSyncDifferenceMs: 100
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -1376,10 +1378,10 @@ MonoBehaviour:
   depthSource: {fileID: 730045953}
   intrinsicProvider: {fileID: 2135528722}
   splatCreator: {fileID: 7200000, guid: d391f97b89d99434dabfa26677a1467e, type: 3}
-  rScale: 1.5
-  rMin: 0.0005
+  rScale: 1.2
+  rMin: 0.00005
   rMax: 0.05
-  verboseLogging: 1
+  verboseLogging: 0
   useDebugCompute: 0
   logPrefix: '[SplatManager]'
 --- !u!1 &996310576
@@ -1412,12 +1414,12 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 2105656095}
+  m_Father: {fileID: 415793780}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 1649, y: -624}
+  m_SizeDelta: {x: 720, y: 480}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &996310578
 MonoBehaviour:
@@ -1587,7 +1589,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   targetProvider: {fileID: 0}
-  logOnUpdate: 1
+  logOnUpdate: 0
   printSamples: 0
 --- !u!1 &1107688465
 GameObject:
@@ -2125,7 +2127,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   shader: {fileID: 7200000, guid: f56203597e4524734993e13313b7e820, type: 3}
   inputProvider: {fileID: 1927989997}
-  radius: 2
+  radius: 3
   invalidVal: -1
   output: {fileID: 8400000, guid: 3584af9ed81454cd3949cc0468dfe811, type: 2}
 --- !u!4 &1338922190
@@ -2265,7 +2267,7 @@ MonoBehaviour:
   stitchMaterial: {fileID: 2100000, guid: 1115b8bc3a6fa4ed6909555efdc9d68b, type: 2}
   output: {fileID: 8400000, guid: 6e11a9da2a44f4d4c83e4c803094b056, type: 2}
   maxTimeSyncDifferenceMs: 50
-  verboseLogs: 1
+  verboseLogs: 0
 --- !u!1 &1458733505
 GameObject:
   m_ObjectHideFlags: 0
@@ -3278,7 +3280,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bab7be1585f6d404e933e9c779ee6211, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  verboseLogs: 1
+  verboseLogs: 0
   depthProvider: {fileID: 1449372850}
   edgeProvider: {fileID: 1731761570}
   guidedCompute: {fileID: 7200000, guid: 2dcb3ee3c565d422aa7c7b5f149de7d9, type: 3}
@@ -3557,7 +3559,6 @@ RectTransform:
   - {fileID: 1020293746}
   - {fileID: 418600256}
   - {fileID: 1722011136}
-  - {fileID: 996310577}
   m_Father: {fileID: 415793780}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.025, y: 0.025}

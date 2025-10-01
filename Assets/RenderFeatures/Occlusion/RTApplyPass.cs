@@ -14,6 +14,8 @@ namespace RenderPass {
         private Material _depthMaskMaterial;
         private ARCameraBackground _arBackground;
 
+        private Matrix4x4 displayMatrix = Matrix4x4.identity;
+
         public RTApplyPass(RTApplyFeature.MaterialSettings settings) : base() {
             renderPassEvent = (RenderPassEvent)((int)RenderPassEvent.BeforeRenderingOpaques + 1);
             _settings = settings;
@@ -25,11 +27,20 @@ namespace RenderPass {
             public Matrix4x4 UnityDisplayTransform;
             public bool HasDisplayTransform;
         }
-        public void SetARBackground(ARCameraBackground arBackground)
-        {
+        public void SetARBackground(ARCameraBackground arBackground) {
             _arBackground = arBackground;
+            
         }
 
+        public void SetARCamera(ARCameraManager arCam){
+            // arCam.frameReceived += OnCameraFrame;
+        }
+
+        // void OnCameraFrame(ARCameraFrameEventArgs args){
+        //     if(!args.displayMatrix.HasValue)
+        //         return;
+        //     displayMatrix = args.displayMatrix.Value;
+        // }
         
 
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData) {
@@ -77,6 +88,8 @@ namespace RenderPass {
                 }
             }
 
+            Debug.Log($"{disp}, {hasDisp}");
+
             // Import external RenderTexture (R32_Float expected)
             var imported = renderGraph.ImportTexture(RTHandles.Alloc(_settings.SourceRT));
 
@@ -95,8 +108,7 @@ namespace RenderPass {
 
                 builder.SetRenderFunc((DepthMaskPassData data, RasterGraphContext context) => {
                     data.DepthMaskMaterial.SetTexture(DEPTH_TEX, data.SourceTexture);
-                    if (data.HasDisplayTransform)
-                    {
+                    if (data.HasDisplayTransform) {
                         data.DepthMaskMaterial.SetMatrix(UNITY_DISPLAY_TRANSFORM, data.UnityDisplayTransform);
                     }
                     context.cmd.DrawProcedural(Matrix4x4.identity, data.DepthMaskMaterial, 0, MeshTopology.Triangles, 3);

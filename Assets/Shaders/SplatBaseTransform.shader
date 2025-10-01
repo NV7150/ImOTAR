@@ -60,12 +60,13 @@ Shader "ImOTAR/SplatBaseTransform" {
                 float3 x0 = p.xyz;
                 float3 x1 = mul((float3x3)_R, x0) + _t;
 
-                // compute pixel radius
-                float r_px = (r * _FxPx) / max(x1.z, 1e-6);
+                // compute pixel radius per axis
+                float r_px_x = (r * _FxPx) / max(x1.z, 1e-6);
+                float r_px_y = (r * _FyPx) / max(x1.z, 1e-6);
 
-                // project to pixel center
-                float u = (_FxPx * x1.x / x1.z) + _CxPx + c.x * r_px * 0.5;
-                float v = (_FyPx * x1.y / x1.z) + _CyPx + c.y * r_px * 0.5;
+                // project to pixel center with axis-specific radius
+                float u = (_FxPx * x1.x / x1.z) + _CxPx + c.x * r_px_x * 0.5;
+                float v = (_FyPx * x1.y / x1.z) + _CyPx + c.y * r_px_y * 0.5;
 
                 // convert to NDC and then clip using custom projection
                 // Build a clip-space position that matches given pixel pos using _Proj

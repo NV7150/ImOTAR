@@ -65,9 +65,11 @@ namespace RenderPass {
             // Fetch ARCameraBackground from current camera and pass it to the render pass
             var currentCamera = renderingData.cameraData.camera;
             var arBackground = currentCamera != null ? currentCamera.GetComponent<ARCameraBackground>() : null;
+            var arCam = currentCamera != null ? currentCamera.GetComponent<ARCameraManager>() : null;
             if (arBackground != null)
             {
                 _mMaterialApplyPass.SetARBackground(arBackground);
+                _mMaterialApplyPass.SetARCamera(arCam);
             }
 
             renderer.EnqueuePass(_mMaterialApplyPass);

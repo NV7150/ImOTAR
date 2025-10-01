@@ -4,6 +4,7 @@ using UnityEngine.Rendering.RenderGraphModule;
 using UnityEngine.Rendering.Universal;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine.XR.ARFoundation;
 
 namespace RenderPass {
     public class DPApplyPass : ScriptableRenderPass{
@@ -15,6 +16,8 @@ namespace RenderPass {
         private int _lastTick = -1;
         private Texture2D _currentDepthTexture;
         private Material _depthMaskMaterial;
+
+        Matrix4x4 displayMatrix = Matrix4x4.zero;
 
         public DPApplyPass(DPApplyFeature.MaterialSettings settings) : base() {
             // renderPassEvent = settings.RenderPassEvent;
@@ -36,7 +39,8 @@ namespace RenderPass {
             public TextureHandle RawDepth;
             public Material TransformMaterial;
         }
-        
+
+
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData) {
             var resourceData = frameData.Get<UniversalResourceData>();
             var cameraColorTextureHandle = resourceData.activeColorTexture;
