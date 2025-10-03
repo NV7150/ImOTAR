@@ -1185,7 +1185,7 @@ MonoBehaviour:
   poseDiff: {fileID: 535656707}
   dieInput: {fileID: 1927989997}
   state: {fileID: 132145016}
-  unknownRatioThresh: 0.35
+  unknownRatioThresh: 1
   rotDieDeg: 30
   posDieMeters: 0.05
   coverageAvgWindow: 5

@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 [DisallowMultipleComponent]
-public class DieByRule : MonoBehaviour {
+public class DieByRuleRaito : MonoBehaviour {
     [Header("Inputs")]
     [SerializeField] private PoseDiffManager poseDiff; // use diffs from last model update
     [SerializeField] private FrameProvider dieInput; // RFloat RT, holes: value < 0

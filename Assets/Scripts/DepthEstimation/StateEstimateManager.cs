@@ -100,6 +100,15 @@ public class StateEstimateManager : AsyncFrameProvider {
             else if (finalizedId == _lastEndedJobId) Debug.Log($"{logPrefix} Update: finalized already ended (id={finalizedId})");
         }
     }
+
+    public void DiscardCurrEstimation(){
+        if (processor == null || !processor.IsInitialized || !processor.IsRunning) {
+            if (logVerbose) 
+            Debug.Log($"Fix: processor failed");
+            return;
+        }
+        processor.InvalidateJob(processor.CurrentJobId);
+    }
 }
 
 

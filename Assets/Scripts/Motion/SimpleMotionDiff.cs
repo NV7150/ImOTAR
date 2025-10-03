@@ -58,13 +58,7 @@ public class SimpleMotionDiff : PoseDiffManager {
     }
 
     private void OnJobStarted(Guid jobId){
-        if (!motion.TryGetLatestData<AbsoluteRotationData>(out var r))
-            throw new InvalidOperationException("SimpleMotionDiff: rotation unavailable at job start");
-        if (!motion.TryGetLatestData<AbsolutePositionData>(out var p))
-            throw new InvalidOperationException("SimpleMotionDiff: position unavailable at job start");
-        _baseRot = r.Rotation;
-        _basePos = p.Position;
-        _baselineTs = DateTime.UtcNow;
+        Reset();
         _generation = jobId; // match provider's job id exactly
         if (logVerbose) Debug.Log($"{logPrefix} Capture baseline gen={_generation}");
     }
@@ -75,6 +69,16 @@ public class SimpleMotionDiff : PoseDiffManager {
             _baselineTs = DateTime.MinValue;
             if (logVerbose) Debug.Log($"{logPrefix} Clear baseline gen={jobId}");
         }
+    }
+
+    public override void Reset() {
+        if (!motion.TryGetLatestData<AbsoluteRotationData>(out var r))
+            throw new InvalidOperationException("SimpleMotionDiff: rotation unavailable at job start");
+        if (!motion.TryGetLatestData<AbsolutePositionData>(out var p))
+            throw new InvalidOperationException("SimpleMotionDiff: position unavailable at job start");
+        _baseRot = r.Rotation;
+        _basePos = p.Position;
+        _baselineTs = DateTime.UtcNow;
     }
 }
 
