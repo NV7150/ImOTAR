@@ -19,7 +19,7 @@ public sealed class BaselineFixStep : CalibStep {
 
     private bool _started;
 
-    public void StartCalib(){
+    public override void StartCalib(){
         if (pose == null) throw new NullReferenceException("BaselineFixStep: pose not assigned");
         if (guide == null) throw new NullReferenceException("BaselineFixStep: guide not assigned");
         if (cameraTr == null){
@@ -42,7 +42,7 @@ public sealed class BaselineFixStep : CalibStep {
         _started = true;
     }
 
-    public void RecordAndEnd(ICalibSuite recorder){
+    public override void RecordAndEnd(ICalibSuite recorder){
         if (!_started) throw new InvalidOperationException("BaselineFixStep: StartCalib must be called before RecordAndEnd");
 
         if (guide.gameObject.activeSelf) guide.gameObject.SetActive(false);

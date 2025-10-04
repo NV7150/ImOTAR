@@ -12,7 +12,7 @@ public class StateHud : MonoBehaviour {
 
     [Header("Sources")]
     [SerializeField] private StateManager state;
-    [SerializeField] private DieByRule die;
+    [SerializeField] private DieByRuleRaito die;
     [SerializeField] private BirthByMotion birth;
     [SerializeField] private PoseDiffManager pose;
 

@@ -33,7 +33,7 @@ public sealed class RotAxisStep : CalibStep {
     private Vector3 _center; // only for Z
     private Vector3 _offset; // only for Z
 
-    public void StartCalib(){
+    public override void StartCalib(){
         if (pose == null) throw new NullReferenceException("RotAxisStep: pose not assigned");
         if (guide == null) throw new NullReferenceException("RotAxisStep: guide not assigned");
         if (cameraTr == null){
@@ -76,7 +76,7 @@ public sealed class RotAxisStep : CalibStep {
         guide.rotation = cameraTr.rotation;
     }
 
-    public void RecordAndEnd(ICalibSuite recorder){
+    public override void RecordAndEnd(ICalibSuite recorder){
         if (!_started) throw new InvalidOperationException("RotAxisStep: StartCalib must be called before RecordAndEnd");
         if (recorder == null) throw new ArgumentNullException(nameof(recorder));
 

@@ -29,7 +29,7 @@ public sealed class PosAxisStep : CalibStep {
     private bool _started;
     private float _offset;
 
-    public void StartCalib(){
+    public override void StartCalib(){
         if (pose == null) throw new NullReferenceException("PosAxisStep: pose not assigned");
         if (guide == null) throw new NullReferenceException("PosAxisStep: guide not assigned");
         if (cameraTr == null){
@@ -63,7 +63,7 @@ public sealed class PosAxisStep : CalibStep {
         guide.rotation = cameraTr.rotation;
     }
 
-    public void RecordAndEnd(ICalibSuite recorder){
+    public override void RecordAndEnd(ICalibSuite recorder){
         if (!_started) throw new InvalidOperationException("PosAxisStep: StartCalib must be called before RecordAndEnd");
         if (recorder == null) throw new ArgumentNullException(nameof(recorder));
 
