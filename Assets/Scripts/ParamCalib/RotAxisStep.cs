@@ -38,7 +38,7 @@ public sealed class RotAxisStep : CalibStep {
         if (pose == null) throw new NullReferenceException("RotAxisStep: pose not assigned");
         if (guide == null) throw new NullReferenceException("RotAxisStep: guide not assigned");
         if (splatMan == null) throw new NullReferenceException("RotAxisStep: splatMan not assigned");
-        
+
         if (cameraTr == null){
             var main = Camera.main;
             if (main == null) throw new InvalidOperationException("RotAxisStep: camera not assigned and Camera.main not found");
@@ -83,7 +83,7 @@ public sealed class RotAxisStep : CalibStep {
         if (recorder == null) 
             throw new ArgumentNullException(nameof(recorder));
         
-        if(pose.TryGetDiffFrom(splatMan.SplatGeneration, out var _, out var q))
+        if(!pose.TryGetDiffFrom(splatMan.SplatGeneration, out var _, out var q))
             throw new InvalidOperationException("RotAxisStep: generation not avail");
 
         Vector3 e = q.eulerAngles;
