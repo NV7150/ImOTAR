@@ -7,6 +7,7 @@ public sealed class RotAxisStep : CalibStep {
 
     [Header("Guide / Camera")]
     [SerializeField] private PoseDiffManager pose;
+    [SerializeField] private SplatManager splatMan;
     [SerializeField] private Transform cameraTr;
     [SerializeField] private Transform guide;
 
@@ -36,13 +37,13 @@ public sealed class RotAxisStep : CalibStep {
     public override void StartCalib(){
         if (pose == null) throw new NullReferenceException("RotAxisStep: pose not assigned");
         if (guide == null) throw new NullReferenceException("RotAxisStep: guide not assigned");
+        if (splatMan == null) throw new NullReferenceException("RotAxisStep: splatMan not assigned");
+        
         if (cameraTr == null){
             var main = Camera.main;
             if (main == null) throw new InvalidOperationException("RotAxisStep: camera not assigned and Camera.main not found");
             cameraTr = main.transform;
         }
-
-        pose.Reset();
 
         _angleDeg = startDeg;
 
@@ -77,10 +78,14 @@ public sealed class RotAxisStep : CalibStep {
     }
 
     public override void RecordAndEnd(ICalibSuite recorder){
-        if (!_started) throw new InvalidOperationException("RotAxisStep: StartCalib must be called before RecordAndEnd");
-        if (recorder == null) throw new ArgumentNullException(nameof(recorder));
+        if (!_started)
+            throw new InvalidOperationException("RotAxisStep: StartCalib must be called before RecordAndEnd");
+        if (recorder == null) 
+            throw new ArgumentNullException(nameof(recorder));
+        
+        if(pose.TryGetDiffFrom(splatMan.SplatGeneration, out var _, out var q))
+            throw new InvalidOperationException("RotAxisStep: generation not avail");
 
-        Quaternion q = pose.Rotation;
         Vector3 e = q.eulerAngles;
         e.x = Normalize180(e.x);
         e.y = Normalize180(e.y);

@@ -1,38 +1,28 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 [DisallowMultipleComponent]
-public class StateSplatCorrector : FrameProvider {
-    [Header("State")]
-    [SerializeField] private StateManager state;
-
+public class SplatCorrector : FrameProvider {
     [Header("Inputs")]
-    [SerializeField] private SplatManager splatManager;
-    [SerializeField] private AsyncFrameProvider depthSource; // retained for parity; events no longer used here
-    [SerializeField] private PoseDiffManager poseDiff;       // job-relative diff (from ProcessStart)
+    [SerializeField] protected SplatManager splatManager;
+    [SerializeField] protected PoseDiffManager poseDiff; // provides job-relative rotation/translation
 
     [Header("Output (meters)")]
-    [SerializeField] private RenderTexture outputMeters;     // RFloat color + depth buffer
+    [SerializeField] protected RenderTexture outputMeters; // RFloat color + depth buffer
 
     [Header("Material")]
-    [SerializeField] private Material splatTransformMaterial; // SplatBaseTransform shader
+    [SerializeField] protected Material splatTransformMaterial; // SplatBaseTransform shader
 
     [Header("Intrinsics")]
-    [SerializeField] private IntrinsicProvider intrinsicProvider;
-    [SerializeField] private float nearMeters = 0.03f;
-    [SerializeField] private float farMeters = 20f;
-
-    [Header("Holes & Rendering")]
-    [SerializeField] private bool useNearestSampling = true;   // parity
-    [SerializeField, Range(0f, 1f)] private float maxUvDispNormalized = 0.01f; // parity
-
+    [SerializeField] protected IntrinsicProvider intrinsicProvider;
+    [SerializeField] protected float nearMeters = 0.03f;
+    [SerializeField] protected float farMeters = 20f;
 
     [Header("Debug")]
-    [SerializeField] private bool verboseLogging = true;
-    [SerializeField] private bool useDebugShader = false;
-    [SerializeField] private string logPrefix = "[StateSplatCorrector]";
+    [SerializeField] protected bool verboseLogging = true;
+    [SerializeField] protected bool useDebugShader = false;
+    [SerializeField] protected string logPrefix = "[SplatCorrector]";
 
     public override RenderTexture FrameTex => outputMeters;
     public override DateTime TimeStamp => _timestamp;
@@ -42,25 +32,19 @@ public class StateSplatCorrector : FrameProvider {
     private float _fxPx, _fyPx, _cxPx, _cyPx;
     private int _imgW, _imgH;
 
-    private Splat _currentSplat;
-    private Guid _lastCompletedJobId = Guid.Empty;
+    protected Splat _currentSplat;
+    protected Guid _lastCompletedJobId = Guid.Empty;
 
     private int _propPoints, _propFx, _propFy, _propCx, _propCy, _propW, _propH, _propR, _propT, _propProj, _propRenderMode, _propZTest;
 
-    private void OnEnable(){
-        if (state == null) throw new NullReferenceException("StateSplatCorrector: state not assigned");
-        if (splatManager == null) throw new NullReferenceException("StateSplatCorrector: splatManager not assigned");
-        if (depthSource == null) throw new NullReferenceException("StateSplatCorrector: depthSource not assigned");
-        if (poseDiff == null) throw new NullReferenceException("StateSplatCorrector: poseDiff not assigned");
-        if (splatTransformMaterial == null) throw new NullReferenceException("StateSplatCorrector: splatTransformMaterial not assigned");
-        if (intrinsicProvider == null) throw new NullReferenceException("StateSplatCorrector: intrinsicProvider not assigned");
-        if (outputMeters == null) throw new NullReferenceException("StateSplatCorrector: outputMeters not assigned");
+    protected virtual void OnEnable(){
+        if (splatManager == null) throw new NullReferenceException("SplatCorrector: splatManager not assigned");
+        if (poseDiff == null) throw new NullReferenceException("SplatCorrector: poseDiff not assigned");
+        if (splatTransformMaterial == null) throw new NullReferenceException("SplatCorrector: splatTransformMaterial not assigned");
+        if (intrinsicProvider == null) throw new NullReferenceException("SplatCorrector: intrinsicProvider not assigned");
+        if (outputMeters == null) throw new NullReferenceException("SplatCorrector: outputMeters not assigned");
 
         splatManager.OnSplatReady += OnSplatReady;
-        // No local baseline capture; SimpleMotionDiff handles it via provider events
-
-        // Ensure output is created at startup (external resource, no size changes here)
-        EnsureOutputCreated();
 
         _propPoints = Shader.PropertyToID("_Points");
         _propFx = Shader.PropertyToID("_FxPx");
@@ -78,7 +62,7 @@ public class StateSplatCorrector : FrameProvider {
         StartCoroutine(WaitForIntrinsics());
     }
 
-    private void OnDisable(){
+    protected virtual void OnDisable(){
         if (splatManager != null) splatManager.OnSplatReady -= OnSplatReady;
     }
 
@@ -111,9 +95,9 @@ public class StateSplatCorrector : FrameProvider {
     private void InitOutputOnce(){
         if (!IsInitTexture){
             if (outputMeters.format != RenderTextureFormat.RFloat)
-                throw new InvalidOperationException("StateSplatCorrector: outputMeters must be RFloat");
+                throw new InvalidOperationException("SplatCorrector: outputMeters must be RFloat");
             if (outputMeters.depth == 0)
-                throw new InvalidOperationException("StateSplatCorrector: outputMeters must have a depth buffer (24-bit recommended)");
+                throw new InvalidOperationException("SplatCorrector: outputMeters must have a depth buffer (24-bit recommended)");
             EnsureOutputCreated();
             outputMeters.wrapMode = TextureWrapMode.Clamp;
             outputMeters.filterMode = FilterMode.Bilinear;
@@ -133,11 +117,8 @@ public class StateSplatCorrector : FrameProvider {
         if (verboseLogging) Debug.Log($"{logPrefix} Received Splat id={splat.JobId} count={splat.Count}");
     }
 
-    // Job start/cancel handled by PoseDiffManager
-
-    private void LateUpdate(){
-        // State gate: only run when ALIVE to avoid any overhead in other states
-        if (state.CurrState != State.ACTIVE) return;
+    protected virtual void LateUpdate(){
+        if (!ShouldRun()) return;
 
         if (!IsInitTexture){
             if (verboseLogging) Debug.Log($"{logPrefix} Early return: texture not initialized");
@@ -152,18 +133,12 @@ public class StateSplatCorrector : FrameProvider {
             return;
         }
         if (_currentSplat.PointsBuffer == null || !_currentSplat.PointsBuffer.IsValid())
-            throw new InvalidOperationException("StateSplatCorrector: PointsBuffer invalid");
+            throw new InvalidOperationException("SplatCorrector: PointsBuffer invalid");
 
-        // Ensure poseDiff has baseline for this job
-        if (poseDiff.Generation == Guid.Empty || poseDiff.Generation != _currentSplat.JobId){
-            if (verboseLogging) Debug.Log($"{logPrefix} Early return: diff baseline not ready or mismatched gen (diff={poseDiff.Generation}, job={_currentSplat.JobId})");
+        if (!TryGetRelative(_currentSplat.JobId, out var relRotSC, out var relPos)){
             return;
         }
-        EnsureOutputCreated();
-        Quaternion relRotSC = poseDiff.Rotation;
-        Vector3 relPos = poseDiff.Translation;
 
-        // Set uniforms with scaled intrinsics
         var intrinsics = intrinsicProvider.GetIntrinsics();
         var scaledIntrinsics = IntrinsicScaler.ScaleToOutput(intrinsics, outputMeters.width, outputMeters.height);
 
@@ -172,7 +147,7 @@ public class StateSplatCorrector : FrameProvider {
             Debug.Log($"{logPrefix} Scaled intrinsics: fx={scaledIntrinsics.fxPx:F2} fy={scaledIntrinsics.fyPx:F2} cx={scaledIntrinsics.cxPx:F2} cy={scaledIntrinsics.cyPx:F2} res={scaledIntrinsics.width}x{scaledIntrinsics.height}");
         }
 
-        int zTest = !SystemInfo.usesReversedZBuffer ? (int)UnityEngine.Rendering.CompareFunction.GreaterEqual : (int)UnityEngine.Rendering.CompareFunction.LessEqual;
+        int zTest = !SystemInfo.usesReversedZBuffer ? (int)CompareFunction.GreaterEqual : (int)CompareFunction.LessEqual;
         splatTransformMaterial.SetInt(_propZTest, zTest);
 
         splatTransformMaterial.SetBuffer(_propPoints, _currentSplat.PointsBuffer);
@@ -186,7 +161,6 @@ public class StateSplatCorrector : FrameProvider {
         splatTransformMaterial.SetVector(_propT, relPos);
         splatTransformMaterial.SetMatrix(_propProj, IntrinsicScaler.BuildProjectionMatrix(scaledIntrinsics, outputMeters.width, outputMeters.height, nearMeters, farMeters));
 
-        // Draw to output
         var active = RenderTexture.active;
         RenderTexture.active = outputMeters;
         float clearDepthValue = !SystemInfo.usesReversedZBuffer ? 0f : 1f;
@@ -197,11 +171,10 @@ public class StateSplatCorrector : FrameProvider {
         int vertexCount = _currentSplat.Count * 6; // 2 triangles per quad
         if (verboseLogging) Debug.Log($"{logPrefix} Drawing {_currentSplat.Count} points, {vertexCount} vertices");
 
-        // Pass 0: valid points
         splatTransformMaterial.SetInt(_propRenderMode, 0);
         splatTransformMaterial.SetPass(0);
         Graphics.DrawProceduralNow(MeshTopology.Triangles, vertexCount, 1);
-        // Pass 1: holes (-1)
+
         splatTransformMaterial.SetInt(_propRenderMode, 1);
         splatTransformMaterial.SetPass(0);
         Graphics.DrawProceduralNow(MeshTopology.Triangles, vertexCount, 1);
@@ -209,16 +182,48 @@ public class StateSplatCorrector : FrameProvider {
 
         _timestamp = DateTime.Now;
         TickUp();
+
+        if(verboseLogging)
+            Debug.Log($"{logPrefix} Update Completed");
+
+        AfterRender(relRotSC, relPos);
     }
 
-    private void EnsureOutputCreated(){
+    protected virtual bool TryGetRelative(Guid jobId, out Quaternion R, out Vector3 t){
+        R = Quaternion.identity;
+        t = Vector3.zero;
+        if (poseDiff == null) return false;
+
+
+        if (!poseDiff.TryGetDiffFrom(jobId, out t, out R)){
+            if (verboseLogging) 
+                Debug.LogWarning($"{logPrefix}: generation not found: {jobId}");
+            return false;
+        }
+        EnsureOutputCreated();
+
+
+
+        return true;
+    }
+
+    protected virtual void AfterRender(Quaternion R, Vector3 t){
+        // No-op by default
+    }
+
+    protected virtual bool ShouldRun(){
+        return true;
+    }
+
+    protected void EnsureOutputCreated(){
         if (outputMeters == null)
-            throw new NullReferenceException("StateSplatCorrector: outputMeters not assigned");
+            throw new NullReferenceException("SplatCorrector: outputMeters not assigned");
         if (outputMeters.format != RenderTextureFormat.RFloat)
-            throw new InvalidOperationException("StateSplatCorrector: outputMeters must be RFloat");
+            throw new InvalidOperationException("SplatCorrector: outputMeters must be RFloat");
         if (outputMeters.depth == 0)
-            throw new InvalidOperationException("StateSplatCorrector: outputMeters must have a depth buffer (24-bit recommended)");
-        if (!outputMeters.IsCreated()) outputMeters.Create();
+            throw new InvalidOperationException("SplatCorrector: outputMeters must have a depth buffer (24-bit recommended)");
+        if (!outputMeters.IsCreated()) 
+            outputMeters.Create();
     }
 }
 

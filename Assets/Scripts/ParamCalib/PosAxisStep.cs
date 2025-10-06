@@ -7,6 +7,7 @@ public sealed class PosAxisStep : CalibStep {
 
     [Header("Guide / Camera")]
     [SerializeField] private PoseDiffManager pose;
+    [SerializeField] private SplatManager splatMan;
     [SerializeField] private Transform cameraTr;
     [SerializeField] private Transform guide;
 
@@ -32,13 +33,12 @@ public sealed class PosAxisStep : CalibStep {
     public override void StartCalib(){
         if (pose == null) throw new NullReferenceException("PosAxisStep: pose not assigned");
         if (guide == null) throw new NullReferenceException("PosAxisStep: guide not assigned");
+        if (splatMan == null) throw new NullReferenceException("PosAxisStep: splatMan not assigned");
         if (cameraTr == null){
             var main = Camera.main;
             if (main == null) throw new InvalidOperationException("PosAxisStep: camera not assigned and Camera.main not found");
             cameraTr = main.transform;
         }
-
-        pose.Reset();
 
         _offset = 0f;
         Vector3 pos = cameraTr.position + cameraTr.forward * guideDist;
@@ -67,7 +67,9 @@ public sealed class PosAxisStep : CalibStep {
         if (!_started) throw new InvalidOperationException("PosAxisStep: StartCalib must be called before RecordAndEnd");
         if (recorder == null) throw new ArgumentNullException(nameof(recorder));
 
-        Vector3 t = pose.Translation;
+        if(!pose.TryGetDiffFrom(splatMan.SplatGeneration, out var t, out var _))
+            throw new InvalidOperationException("PosAxisStep: poseDiff not avail");
+
         float mag;
         if (kind == AxisKind.X) mag = Mathf.Abs(t.x) * Mathf.Abs(safety);
         else if (kind == AxisKind.Y) mag = Mathf.Abs(t.y) * Mathf.Abs(safety);

@@ -21,6 +21,8 @@ public class SimpleSplatManager : SplatManager {
     [SerializeField] private bool useDebugCompute = false;
     [SerializeField] private string logPrefix = "[SplatManager]";
 
+    public override Guid SplatGeneration => _currentSplat != null ? _currentSplat.JobId : Guid.Empty;
+
     private bool _hasIntrinsics;
     private float _fxPx, _fyPx, _cxPx, _cyPx;
 
@@ -89,6 +91,7 @@ public class SimpleSplatManager : SplatManager {
     }
 
     private void OnDepthJobCompleted(AsyncFrame frame){
+
         if (!_hasIntrinsics) throw new InvalidOperationException("SplatManager: intrinsics not ready");
         if (frame.RenderTexture == null) throw new NullReferenceException("SplatManager: frame RenderTexture is null");
 
@@ -143,7 +146,8 @@ public class SimpleSplatManager : SplatManager {
             _currentSplat = null;
         }
         _currentSplat = new Splat(points, count, frame.Id);
-        if (verboseLogging) Debug.Log($"{logPrefix} Splat ready id={frame.Id} count={count}");
+        if (verboseLogging)
+            Debug.Log($"{logPrefix} Splat ready id={frame.Id} count={count}");
         base.InvokeReady(_currentSplat);
     }
 

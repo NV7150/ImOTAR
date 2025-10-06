@@ -88,8 +88,6 @@ namespace RenderPass {
                 }
             }
 
-            Debug.Log($"{disp}, {hasDisp}");
-
             // Import external RenderTexture (R32_Float expected)
             var imported = renderGraph.ImportTexture(RTHandles.Alloc(_settings.SourceRT));
 

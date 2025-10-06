@@ -11,6 +11,7 @@ public class DieByMotionAxis : MonoBehaviour {
     [Header("Inputs")]
     [SerializeField] private PoseDiffManager poseDiff;
     [SerializeField] private StateManager state;
+    [SerializeField] private SplatManager splat;
 
     [Header("Thresholds")]
     [SerializeField] private Vector3 rotDegThreshDeg = new Vector3(5f, 5f, 5f);
@@ -33,17 +34,21 @@ public class DieByMotionAxis : MonoBehaviour {
     }
 
     private void Update(){
-        if (state.CurrState != State.ACTIVE) return;
-        if (poseDiff.Generation == Guid.Empty) return;
+        if (state.CurrState != State.ACTIVE) 
+            return;
+        var guid = splat.SplatGeneration;
+        
+        if (!poseDiff.TryGetDiffFrom(guid, out var trans, out var rot)) 
+            return;
 
         // Evaluate rotation threshold per-axis
-        Vector3 rotAxisValuesDeg = GetRotationAxisValuesDeg(poseDiff.Rotation);
+        Vector3 rotAxisValuesDeg = GetRotationAxisValuesDeg(rot);
         bool dieRot = (Mathf.Abs(rotAxisValuesDeg.x) >= rotDegThreshDeg.x)
                    || (Mathf.Abs(rotAxisValuesDeg.y) >= rotDegThreshDeg.y)
                    || (Mathf.Abs(rotAxisValuesDeg.z) >= rotDegThreshDeg.z);
 
         // Evaluate translation threshold per-axis (current-local axes)
-        Vector3 t = poseDiff.Translation;
+        Vector3 t = trans;
         bool diePos = (Mathf.Abs(t.x) >= posThreshMeters.x)
                    || (Mathf.Abs(t.y) >= posThreshMeters.y)
                    || (Mathf.Abs(t.z) >= posThreshMeters.z);

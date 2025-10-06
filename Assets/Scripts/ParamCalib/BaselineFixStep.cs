@@ -36,9 +36,6 @@ public sealed class BaselineFixStep : CalibStep {
         guide.rotation = cameraTr.rotation;
         if (!guide.gameObject.activeSelf) guide.gameObject.SetActive(true);
 
-        // Reset baseline at the start of each step (common policy)
-        pose.Reset();
-
         _started = true;
     }
 

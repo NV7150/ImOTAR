@@ -235,7 +235,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 36ab75f14e9474cdd83202f2be8895cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  pose: {fileID: 535656707}
+  pose: {fileID: 535656709}
+  splatMan: {fileID: 988747941}
   cameraTr: {fileID: 1461364217}
   guide: {fileID: 965390931}
   kind: 0
@@ -1162,7 +1163,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 36ab75f14e9474cdd83202f2be8895cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  pose: {fileID: 535656707}
+  pose: {fileID: 535656709}
+  splatMan: {fileID: 988747941}
   cameraTr: {fileID: 1461364217}
   guide: {fileID: 965390931}
   kind: 1
@@ -1321,7 +1323,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 535656708}
-  - component: {fileID: 535656707}
+  - component: {fileID: 535656709}
   m_Layer: 0
   m_Name: MotionDiff
   m_TagString: Untagged
@@ -1329,22 +1331,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &535656707
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 535656706}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 091273200698841f99ef1c56878ed7de, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  provider: {fileID: 664507040}
-  motion: {fileID: 230356828}
-  logVerbose: 0
-  logPrefix: '[SimpleMotionDiff]'
 --- !u!4 &535656708
 Transform:
   m_ObjectHideFlags: 0
@@ -1360,6 +1346,22 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &535656709
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 535656706}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ea77cfbb943e44815b8e125a982cbd43, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  provider: {fileID: 664507040}
+  motion: {fileID: 230356828}
+  logVerbose: 0
+  logPrefix: '[HistoricalMotionDiff]'
 --- !u!1 &664507039
 GameObject:
   m_ObjectHideFlags: 0
@@ -1752,7 +1754,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 76b91112118f24c499ff1170121bdd27, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  pose: {fileID: 535656707}
+  pose: {fileID: 535656709}
+  splatMan: {fileID: 988747941}
   cameraTr: {fileID: 1461364217}
   guide: {fileID: 965390931}
   kind: 0
@@ -1954,7 +1957,7 @@ MonoBehaviour:
   rScale: 1.2
   rMin: 0.00005
   rMax: 0.05
-  verboseLogging: 0
+  verboseLogging: 1
   useDebugCompute: 0
   logPrefix: '[SplatManager]'
 --- !u!1 &989429013
@@ -2893,7 +2896,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 36ab75f14e9474cdd83202f2be8895cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  pose: {fileID: 535656707}
+  pose: {fileID: 535656709}
+  splatMan: {fileID: 988747941}
   cameraTr: {fileID: 1461364217}
   guide: {fileID: 965390931}
   kind: 0
@@ -3664,7 +3668,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: aab304c46dbe6497191595d4c7c81f53, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  pose: {fileID: 535656707}
+  pose: {fileID: 535656709}
   cameraTr: {fileID: 1461364217}
   guide: {fileID: 965390931}
   guideDist: 1
@@ -3778,7 +3782,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 76b91112118f24c499ff1170121bdd27, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  pose: {fileID: 535656707}
+  pose: {fileID: 535656709}
+  splatMan: {fileID: 988747941}
   cameraTr: {fileID: 1461364217}
   guide: {fileID: 965390931}
   kind: 1
@@ -4077,7 +4082,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 76b91112118f24c499ff1170121bdd27, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  pose: {fileID: 535656707}
+  pose: {fileID: 535656709}
+  splatMan: {fileID: 988747941}
   cameraTr: {fileID: 1461364217}
   guide: {fileID: 965390931}
   kind: 2
@@ -4130,28 +4136,19 @@ MonoBehaviour:
   m_GameObject: {fileID: 1927989994}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6ebebbcae039c4fd79f67b466d686d2a, type: 3}
+  m_Script: {fileID: 11500000, guid: 84e1f5608e6df49dca5f465de8c338d2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   splatManager: {fileID: 988747941}
-  depthSource: {fileID: 664507040}
-  motionSource: {fileID: 230356828}
-  scheduler: {fileID: 693873558}
+  poseDiff: {fileID: 535656709}
   outputMeters: {fileID: 8400000, guid: 0c06b4f5c3e1c44979a73699b993d424, type: 2}
   splatTransformMaterial: {fileID: 2100000, guid: 4ac46aa08e24344dc9007287b3ecb50a, type: 2}
   intrinsicProvider: {fileID: 2135528722}
   nearMeters: 0.03
   farMeters: 20
-  useNearestSampling: 1
-  maxUvDispNormalized: 0.01
-  useYaw: 1
-  usePitch: 1
-  useRoll: 1
-  updateRequestRotationThresholdDeg: 3
-  updateRequestTranslationThresholdMeters: 0.02
-  verboseLogging: 0
+  verboseLogging: 1
   useDebugShader: 0
-  logPrefix: '[SplatBaseCorrector]'
+  logPrefix: '[SplatCorrector]'
 --- !u!1 &1951123224
 GameObject:
   m_ObjectHideFlags: 0

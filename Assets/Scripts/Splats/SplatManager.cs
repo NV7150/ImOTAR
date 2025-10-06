@@ -5,6 +5,8 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public abstract class SplatManager : MonoBehaviour {
 
+    public abstract Guid SplatGeneration {get;}
+
     public event Action<Splat> OnSplatReady;
 
     protected void InvokeReady(Splat splat){
