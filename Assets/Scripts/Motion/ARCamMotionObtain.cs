@@ -11,11 +11,6 @@ public class ARCamMotionObtain : MotionObtainBase {
 
     private Vector3 _prevPosition = Vector3.zero;
     private Vector3 _lastFramePositionDelta = Vector3.zero;
-
-    // History is recorded via base.Record<T>()
-
-    // Capabilities are now queried via TryGetLatestData<T>
-
     private void Awake() {
         if (cameraTransform == null) {
             var mainCam = Camera.main;

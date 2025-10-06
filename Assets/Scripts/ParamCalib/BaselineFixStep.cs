@@ -15,7 +15,7 @@ public sealed class BaselineFixStep : CalibStep {
     [Header("Message")]
     [SerializeField] private string stepMessage = "Stabilize target and press to set baseline";
 
-    public new string StepMessage => stepMessage;
+    public override string StepMessage => stepMessage;
 
     private bool _started;
 
