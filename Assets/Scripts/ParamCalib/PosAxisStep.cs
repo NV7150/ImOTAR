@@ -7,7 +7,7 @@ public sealed class PosAxisStep : CalibStep {
 
     [Header("Guide / Camera")]
     [SerializeField] private PoseDiffManager pose;
-    [SerializeField] private SplatManager splatMan;
+    [SerializeField] private StructureManager splatMan;
     [SerializeField] private Transform cameraTr;
     [SerializeField] private Transform guide;
 
@@ -67,7 +67,7 @@ public sealed class PosAxisStep : CalibStep {
         if (!_started) throw new InvalidOperationException("PosAxisStep: StartCalib must be called before RecordAndEnd");
         if (recorder == null) throw new ArgumentNullException(nameof(recorder));
 
-        if(!pose.TryGetDiffFrom(splatMan.SplatGeneration, out var t, out var _))
+        if(!pose.TryGetDiffFrom(splatMan.Generation, out var t, out var _))
             throw new InvalidOperationException("PosAxisStep: poseDiff not avail");
 
         float mag;

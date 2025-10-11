@@ -2,7 +2,7 @@ using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
-using Unity.Sentis;
+using Unity.InferenceEngine;
 using System.Collections.Generic;
 
 /// <summary>

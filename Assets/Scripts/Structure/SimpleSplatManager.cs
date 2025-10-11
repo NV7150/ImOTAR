@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 [DisallowMultipleComponent]
-public class SimpleSplatManager : SplatManager {
+public class SimpleSplatManager : StructureManager {
     [Header("Inputs")]
     [SerializeField] private AsyncFrameProvider depthSource;     // depth frames provider (RFloat meters)
     [SerializeField] private IntrinsicProvider intrinsicProvider; // for intrinsics
@@ -21,7 +21,7 @@ public class SimpleSplatManager : SplatManager {
     [SerializeField] private bool useDebugCompute = false;
     [SerializeField] private string logPrefix = "[SplatManager]";
 
-    public override Guid SplatGeneration => _currentSplat != null ? _currentSplat.JobId : Guid.Empty;
+    public override Guid Generation => _currentSplat != null ? _currentSplat.JobId : Guid.Empty;
 
     private bool _hasIntrinsics;
     private float _fxPx, _fyPx, _cxPx, _cyPx;
@@ -29,7 +29,7 @@ public class SimpleSplatManager : SplatManager {
     private int _kernel;
     private int _propDepthTex, _propPoints, _propW, _propH, _propFx, _propFy, _propCx, _propCy, _propRScale, _propRMin, _propRMax, _propValidCount;
 
-    private Splat _currentSplat;
+    private PointCloud _currentSplat;
 
     private void OnEnable(){
         if (depthSource == null) throw new NullReferenceException("SplatManager: depthSource not assigned");
@@ -145,7 +145,7 @@ public class SimpleSplatManager : SplatManager {
             _currentSplat.Dispose();
             _currentSplat = null;
         }
-        _currentSplat = new Splat(points, count, frame.Id);
+        _currentSplat = new PointCloud(points, count, frame.Id);
         if (verboseLogging)
             Debug.Log($"{logPrefix} Splat ready id={frame.Id} count={count}");
         base.InvokeReady(_currentSplat);

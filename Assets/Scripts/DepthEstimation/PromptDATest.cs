@@ -1,12 +1,13 @@
 using System;
 using System.Collections.Generic;
+using Unity.InferenceEngine;
 using UnityEngine;
-using Unity.Sentis;
+
 
 public class PromptDATest : MonoBehaviour
 {
     [Header("Models / IO")]
-    [SerializeField] private ModelAsset promptDaOnnx;              // 2入力: "image", "prompt_depth"（Python版と同名）
+    [SerializeField] private Unity.InferenceEngine.ModelAsset promptDaOnnx;              // 2入力: "image", "prompt_depth"（Python版と同名）
     [SerializeField] private Texture2D testImg;               // RGB
     [SerializeField] private Texture2D testDepth;             // 単一ch16bit(mm)想定（R16）
     [SerializeField] private RenderTexture visualizeTexture;  // 出力先（RFloat, サイズ=_newW×_newH）
@@ -16,11 +17,11 @@ public class PromptDATest : MonoBehaviour
     [SerializeField] private int onnxHeight = 2156;
 
     // Runtime
-    Model  _runtimeModel;
-    Worker _worker;
+    Unity.InferenceEngine.Model  _runtimeModel;
+    Unity.InferenceEngine.Worker _worker;
 
-    Tensor<float> _imageTensor;   // (1,3,_dstH,_dstW)
-    Tensor<float> _promptTensor;  // (1,1,_dstH,_dstW) ※ここでは0..1（R16正規化値）
+    Unity.InferenceEngine.Tensor<float> _imageTensor;   // (1,3,_dstH,_dstW)
+    Unity.InferenceEngine.Tensor<float> _promptTensor;  // (1,1,_dstH,_dstW) ※ここでは0..1（R16正規化値）
 
     // Letterbox / temp
     int _dstW, _dstH, _newW, _newH, _padX, _padY;
@@ -30,11 +31,11 @@ public class PromptDATest : MonoBehaviour
     string _imageInputName  = "image";
     string _promptInputName = "prompt_depth";
 
-    private Model _loadedModel;
+    private Unity.InferenceEngine.Model _loadedModel;
 
     void Start()
     {
-        _loadedModel = ModelLoader.Load(promptDaOnnx);
+        _loadedModel = Unity.InferenceEngine.ModelLoader.Load(promptDaOnnx);
         // モデル入力名をModel.inputs（小文字）から確定
         ResolveInputNamesFromModel(_loadedModel);
 
@@ -46,7 +47,7 @@ public class PromptDATest : MonoBehaviour
         RenderOutputCropped(); // レタボ削除して visualizeTexture へ
     }
 
-    void ResolveInputNamesFromModel(Model model)
+    void ResolveInputNamesFromModel(Unity.InferenceEngine.Model model)
     {
         // 名前が分かっているならこの処理は省略可（Pythonと同名: "image", "prompt_depth"）
         var inputs = model.inputs; // List<Model.Input>
@@ -95,11 +96,11 @@ public class PromptDATest : MonoBehaviour
     // 旧: InitializeModel_WithPromptRescaleU01_to_mm
     void InitializeModel_WithPromptDepthToMeters()
     {
-        var g = new FunctionalGraph();
+        var g = new Unity.InferenceEngine.FunctionalGraph();
         var finputs = g.AddInputs(_loadedModel);
 
         var inputsMeta = _loadedModel.inputs;
-        var fwdInputs = new FunctionalTensor[finputs.Length];
+        var fwdInputs = new Unity.InferenceEngine.FunctionalTensor[finputs.Length];
         for (int i = 0; i < finputs.Length; i++) fwdInputs[i] = finputs[i];
 
         // prompt のインデックス特定
@@ -116,10 +117,10 @@ public class PromptDATest : MonoBehaviour
         // R16サンプリング値(0..1) → meters: (value * 65535) / 1000 = value * 65.535
         fwdInputs[promptIdx] = finputs[promptIdx] * 65.535f;
 
-        var outs  = Functional.Forward(_loadedModel, fwdInputs);
+        var outs  = Unity.InferenceEngine.Functional.Forward(_loadedModel, fwdInputs);
         var depth = outs[0]; // (1,1,H,W) 想定
         _runtimeModel = g.Compile(depth);
-        _worker= new Worker(_runtimeModel, BackendType.GPUCompute);
+        _worker= new Unity.InferenceEngine.Worker(_runtimeModel, Unity.InferenceEngine.BackendType.GPUCompute);
     } 
 
 
@@ -165,8 +166,8 @@ public class PromptDATest : MonoBehaviour
     {
         // フル（レタボ込み）を書き出し
         _fullOutputRT = CreateRT(_dstW, _dstH, RenderTextureFormat.RFloat);
-        var output = _worker.PeekOutput() as Tensor<float>; // (1,1,_dstH,_dstW) 想定（単位: m）
-        TextureConverter.RenderToTexture(output, _fullOutputRT);
+        var output = _worker.PeekOutput() as Unity.InferenceEngine.Tensor<float>; // (1,1,_dstH,_dstW) 想定（単位: m）
+        Unity.InferenceEngine.TextureConverter.RenderToTexture(output, _fullOutputRT);
         DepthRTInspector.DumpStats(_fullOutputRT);
 
         // ROIのみを可視化先へコピー（= レタボ削除）
@@ -182,7 +183,7 @@ public class PromptDATest : MonoBehaviour
 
     // 16bit単ch(mm) → 0..1で取り込み → レタボ → Tensor(1,1,H,W)
     // mmへの復元（×65535）はグラフ内で適用済み
-    static Tensor<float> MakePromptTensorFromDepth16mm(
+    static Unity.InferenceEngine.Tensor<float> MakePromptTensorFromDepth16mm(
         Texture2D srcDepth16mm, int dstW, int dstH, int newW, int newH, int padX, int padY)
     {
         var rtResized = CreateRT(newW, newH, RenderTextureFormat.RFloat);
@@ -191,16 +192,16 @@ public class PromptDATest : MonoBehaviour
         var rtCanvas  = CreateRT(dstW, dstH, RenderTextureFormat.RFloat);
         Graphics.CopyTexture(rtResized, 0, 0, 0, 0, newW, newH, rtCanvas, 0, 0, padX, padY);
 
-        var t = new Tensor<float>(new TensorShape(1, 1, dstH, dstW));
+        var t = new Unity.InferenceEngine.Tensor<float>(new Unity.InferenceEngine.TensorShape(1, 1, dstH, dstW));
         var transform = new TextureTransform().SetDimensions(dstW, dstH);
-        TextureConverter.ToTensor(rtCanvas, t, transform);
+        Unity.InferenceEngine.TextureConverter.ToTensor(rtCanvas, t, transform);
 
         ReleaseAndDestroy(rtResized);
         ReleaseAndDestroy(rtCanvas);
         return t;
     }
 
-    static Tensor<float> MakeImageTensorLetterboxed(
+    static Unity.InferenceEngine.Tensor<float> MakeImageTensorLetterboxed(
         Texture2D srcRgb, int dstW, int dstH, int newW, int newH, int padX, int padY)
     {
         var rtResized = CreateRT(newW, newH, RenderTextureFormat.ARGB32);
@@ -209,9 +210,9 @@ public class PromptDATest : MonoBehaviour
         var rtCanvas  = CreateRT(dstW, dstH, RenderTextureFormat.ARGB32);
         Graphics.CopyTexture(rtResized, 0, 0, 0, 0, newW, newH, rtCanvas, 0, 0, padX, padY);
 
-        var t = new Tensor<float>(new TensorShape(1, 3, dstH, dstW));
+        var t = new Unity.InferenceEngine.Tensor<float>(new Unity.InferenceEngine.TensorShape(1, 3, dstH, dstW));
         var transform = new TextureTransform().SetDimensions(dstW, dstH);
-        TextureConverter.ToTensor(rtCanvas, t, transform);
+        Unity.InferenceEngine.TextureConverter.ToTensor(rtCanvas, t, transform);
 
         ReleaseAndDestroy(rtResized);
         ReleaseAndDestroy(rtCanvas);

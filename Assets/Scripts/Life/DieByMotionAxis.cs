@@ -11,7 +11,7 @@ public class DieByMotionAxis : MonoBehaviour {
     [Header("Inputs")]
     [SerializeField] private PoseDiffManager poseDiff;
     [SerializeField] private StateManager state;
-    [SerializeField] private SplatManager splat;
+    [SerializeField] private StructureManager splat;
 
     [Header("Thresholds")]
     [SerializeField] private Vector3 rotDegThreshDeg = new Vector3(5f, 5f, 5f);
@@ -36,7 +36,7 @@ public class DieByMotionAxis : MonoBehaviour {
     private void Update(){
         if (state.CurrState != State.ACTIVE) 
             return;
-        var guid = splat.SplatGeneration;
+        var guid = splat.Generation;
         
         if (!poseDiff.TryGetDiffFrom(guid, out var trans, out var rot)) 
             return;

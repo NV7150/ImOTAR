@@ -11,7 +11,7 @@
 // /// - Step(n): call MoveNext() n times (no external CommandBuffer needed)
 // /// - On finalization: write model output to textures (RenderToTexture → ROI copy)
 // /// </summary>
-// public class PromptDAIterableProcessor : MonoBehaviour {
+// public class PDAItrProcessor : DepthModelIterableProcessor {
 //     [Header("Output")]
 //     [SerializeField] private RenderTexture outputRT;          // Final output (RFloat, newW x newH)
 //     [Header("Model Configuration")]
@@ -30,6 +30,12 @@
 //     [Header("Debug")]
 //     [SerializeField] private bool verboseLogging = true;
 //     [SerializeField] private string logPrefix = "[PromptDA-ITER]";
+
+//     [Header("Input Sources")]
+//     [SerializeField] private FrameProvider cameraRec;
+//     [SerializeField] private FrameProvider depthRec;
+//     [Header("Sync Settings")]
+//     [SerializeField] private float maxTimeSyncDifferenceMs = 100f;
 
 //     // Constants
 //     private const int LETTERBOX_MULTIPLE = 14;
@@ -68,15 +74,29 @@
 //     private bool _supportsAsyncCompute;
 //     private HashSet<Guid> _invalidJobIds = new HashSet<Guid>();
 
-//     // Meta
-//     public bool IsInitialized { get; private set; }
-//     // 公開するのは世代IDのみ（boolではなく世代の状態で判定させる）
-//     public Guid CurrentJobId   => _currentJobId;
-//     public Guid FinalizedJobId => _finalizedJobId;
-//     public Guid CompletedJobId => _completedJobId;
-//     public DateTime CurrentTimestamp { get; private set; }
-//     public RenderTexture ResultRT => outputRT;
-//     public bool IsRunning => _running;
+//     // Input cache
+//     private struct FrameData {
+//         public DateTime timestamp;
+//         public RenderTexture rgbFrame;
+//         public RenderTexture depthFrame;
+//         public DateTime rgbTimestamp;
+//         public DateTime depthTimestamp;
+//         public bool isValid;
+//     }
+//     private FrameData _latestRgb;
+//     private FrameData _latestDepth;
+//     private bool _consumedLatest = true; // consume gate
+
+//     // Meta (implement abstract props)
+//     private bool _isInitialized;
+//     public override bool IsInitialized => _isInitialized;
+//     public override Guid CurrentJobId   => _currentJobId;
+//     public override Guid FinalizedJobId => _finalizedJobId;
+//     public override Guid CompletedJobId => _completedJobId;
+//     private DateTime _currentTimestamp;
+//     public override DateTime CurrentTimestamp => _currentTimestamp;
+//     public override RenderTexture ResultRT => outputRT;
+//     public override bool IsRunning => _running;
 
 //     void Awake() {
 //         _supportsAsyncCompute = SystemInfo.supportsAsyncCompute;
@@ -104,7 +124,7 @@
 //     }
 
 //     /// <summary> Start a new inference (preprocess + initialize iterator). Does not fully execute yet. </summary>
-//     public bool Begin(RenderTexture rgbInput, RenderTexture depthInput, DateTime timestamp) {
+//     private bool Begin(RenderTexture rgbInput, RenderTexture depthInput, DateTime timestamp) {
 //         if (!IsInitialized || rgbInput == null || depthInput == null) {
 //             if (verboseLogging)
 //                 Debug.LogWarning($"{logPrefix} Begin: invalid (IsInit={IsInitialized}, rgbNull={rgbInput==null}, depNull={depthInput==null})");
@@ -156,7 +176,7 @@
 //         _iter = _worker.ScheduleIterable(feeds);
 
 //         _running       = true;
-//         CurrentTimestamp = timestamp;
+//         _currentTimestamp = timestamp;
 
 //         if (verboseLogging)
 //             Debug.Log($"{logPrefix} Begin: iterable started (frame={Time.frameCount}, t={Time.unscaledTime:0.000})");
@@ -164,7 +184,7 @@
 //     }
 
 //     /// <summary> Advance the iterator by the specified number of steps. </summary>
-//     public void Step(int steps) {
+//     public override void Step(int steps) {
 //         if (!_running || _iter == null || steps <= 0) {
 //             return;
 //         }
@@ -205,9 +225,12 @@
 //             }
 //         }
 
-//         if (verboseLogging && _finalizedJobId != Guid.Empty) {
-//             var passed = HasDelayElapsed();
-//             Debug.Log($"{logPrefix} Step: advanced={advanced}, running={_running}, finalized={(_finalizedJobId!=Guid.Empty)}, passed={passed})");
+//         // internal promotion (processor responsibility)
+//         if (_finalizedJobId != Guid.Empty && _completedJobId != _finalizedJobId && HasDelayElapsed()) {
+//             _completedJobId = _finalizedJobId;
+//             _invalidJobIds.Remove(_completedJobId);
+//             if (verboseLogging)
+//                 Debug.Log($"{logPrefix} Complete: jobId={_completedJobId}");
 //         }
 //     }
 
@@ -223,7 +246,7 @@
 //         _runtimeModel = Unity.InferenceEngine.ModelLoader.Load(promptDaOnnx);
 //         ResolveInputNamesFromModel(_runtimeModel);
 //         _worker = new Unity.InferenceEngine.Worker(_runtimeModel, backendType);
-//         IsInitialized = true;
+//         _isInitialized = true;
 //         if (verboseLogging)
 //             Debug.Log($"{logPrefix} Model loaded. inputs={_runtimeModel.inputs.Count}, backend={backendType}");
 //     }
@@ -308,39 +331,86 @@
 //         int wait = Mathf.Max(0, completionFrameDelay);
 //         return (Time.frameCount - _finalizeFrame) >= wait;
 //     }
-
-//     // Job ID (Guid) API
-//     public void SetJobId(Guid jobId) {
-//         _currentJobId = jobId;
-//         if (verboseLogging) 
-//             Debug.Log($"{logPrefix} SetJobId: {_currentJobId}");
-//     }
-
-//     /// <summary>
-//     /// Promote a finalized job to completed after the configured delay (one-time true).
-//     /// </summary>
-//     public bool TryPromoteCompleted() {
-//         if (_finalizedJobId == Guid.Empty) 
-//             return false;
-//         if (_completedJobId == _finalizedJobId)
-//             return false;
-//         if (!HasDelayElapsed()) 
-//             return false;
-//         _completedJobId = _finalizedJobId;
-//         _invalidJobIds.Remove(_completedJobId);
-//         if (verboseLogging) 
-//             Debug.Log($"{logPrefix} Complete: jobId={_completedJobId}");
-//         return true;
-//     }
-
 //     /// <summary>
 //     /// Disable final apply (write to outputRT) for the specified JobID.
 //     /// </summary>
-//     public void InvalidateJob(Guid jobId) {
+//     public override void InvalidateJob(Guid jobId) {
 //         if (jobId == Guid.Empty) 
 //             return;
 //         _invalidJobIds.Add(jobId);
 //         if (verboseLogging) 
 //             Debug.Log($"{logPrefix} InvalidateJob: {jobId}");
+//     }
+
+//     // ---- Abstract implementations for inputs/start/output ----
+//     public override void SetupInputSubscriptions(){
+//         if (cameraRec != null) {
+//             cameraRec.OnFrameUpdated -= OnRgbFrameReceived;
+//             cameraRec.OnFrameUpdated += OnRgbFrameReceived;
+//         }
+//         if (depthRec != null) {
+//             depthRec.OnFrameUpdated -= OnDepthFrameReceived;
+//             depthRec.OnFrameUpdated += OnDepthFrameReceived;
+//         }
+//     }
+
+//     private void OnRgbFrameReceived(RenderTexture rgb){
+//         _latestRgb = new FrameData{
+//             timestamp = cameraRec != null ? cameraRec.TimeStamp : DateTime.MinValue,
+//             rgbFrame = rgb,
+//             rgbTimestamp = cameraRec != null ? cameraRec.TimeStamp : DateTime.MinValue,
+//             depthTimestamp = DateTime.MinValue,
+//             isValid = true
+//         };
+//         _consumedLatest = false;
+//     }
+
+//     private void OnDepthFrameReceived(RenderTexture depth){
+//         _latestDepth = new FrameData{
+//             timestamp = depthRec != null ? depthRec.TimeStamp : DateTime.MinValue,
+//             depthFrame = depth,
+//             rgbTimestamp = DateTime.MinValue,
+//             depthTimestamp = depthRec != null ? depthRec.TimeStamp : DateTime.MinValue,
+//             isValid = true
+//         };
+//         _consumedLatest = false;
+//     }
+
+//     public override Guid TryStartProcessing(){
+//         if (_running)
+//             return Guid.Empty;
+//         if (!IsInitialized || outputRT == null)
+//             return Guid.Empty;
+//         if (!_latestRgb.isValid || !_latestDepth.isValid)
+//             return Guid.Empty;
+//         var dtMs = Mathf.Abs((float)(_latestRgb.rgbTimestamp - _latestDepth.depthTimestamp).TotalMilliseconds);
+//         if (dtMs > maxTimeSyncDifferenceMs)
+//             return Guid.Empty;
+
+//         var ts = (_latestRgb.rgbTimestamp > _latestDepth.depthTimestamp) ? _latestRgb.rgbTimestamp : _latestDepth.depthTimestamp;
+//         var ok = Begin(_latestRgb.rgbFrame, _latestDepth.depthFrame, ts);
+//         if (!ok)
+//             return Guid.Empty;
+
+//         _currentJobId = Guid.NewGuid();
+//         if (verboseLogging)
+//             Debug.Log($"{logPrefix} Begin OK: jobId={_currentJobId}, ts={ts:HH:mm:ss.fff}");
+//         _consumedLatest = true;
+//         _latestRgb.isValid = false;
+//         _latestDepth.isValid = false;
+//         return _currentJobId;
+//     }
+
+//     public override void FillOutput(float value){
+//         var rt = outputRT;
+//         if (rt == null) return;
+//         var active = RenderTexture.active;
+//         RenderTexture.active = rt;
+//         GL.Clear(false, true, new Color(value, value, value, 1f));
+//         RenderTexture.active = active;
+//     }
+
+//     public override void ClearOutput(){
+//         FillOutput(0f);
 //     }
 // }

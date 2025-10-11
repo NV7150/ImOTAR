@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 [DisallowMultipleComponent]
-public class StateSplatCorrector : SplatCorrector {
+public class StateSplatCorrector : PcdCorrector {
     [Header("State")]
     [SerializeField] private StateManager state;
 

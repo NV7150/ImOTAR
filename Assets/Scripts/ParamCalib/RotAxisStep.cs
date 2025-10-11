@@ -7,7 +7,7 @@ public sealed class RotAxisStep : CalibStep {
 
     [Header("Guide / Camera")]
     [SerializeField] private PoseDiffManager pose;
-    [SerializeField] private SplatManager splatMan;
+    [SerializeField] private StructureManager splatMan;
     [SerializeField] private Transform cameraTr;
     [SerializeField] private Transform guide;
 
@@ -83,7 +83,7 @@ public sealed class RotAxisStep : CalibStep {
         if (recorder == null) 
             throw new ArgumentNullException(nameof(recorder));
         
-        if(!pose.TryGetDiffFrom(splatMan.SplatGeneration, out var _, out var q))
+        if(!pose.TryGetDiffFrom(splatMan.Generation, out var _, out var q))
             throw new InvalidOperationException("RotAxisStep: generation not avail");
 
         Vector3 e = q.eulerAngles;

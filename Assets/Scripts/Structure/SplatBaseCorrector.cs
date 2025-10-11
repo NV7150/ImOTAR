@@ -6,7 +6,7 @@ using UnityEngine.Rendering;
 [DisallowMultipleComponent]
 public class SplatBaseCorrector : FrameProvider {
     [Header("Inputs")]
-    [SerializeField] private SplatManager splatManager;
+    [SerializeField] private StructureManager splatManager;
     [SerializeField] private AsyncFrameProvider depthSource; // for job start/cancel to record pose timing
     [SerializeField] private MotionObtain motionSource;      // for current pose and start pose capture
     [SerializeField] private Scheduler scheduler;            // for update requests
@@ -51,7 +51,7 @@ public class SplatBaseCorrector : FrameProvider {
     private readonly Dictionary<Guid, Quaternion> _startPoseByJobId = new Dictionary<Guid, Quaternion>();
     private readonly Dictionary<Guid, Vector3> _startPosByJobId = new Dictionary<Guid, Vector3>();
 
-    private Splat _currentSplat;
+    private PointCloud _currentSplat;
     private Guid _lastCompletedJobId = Guid.Empty;
 
     private int _propPoints, _propFx, _propFy, _propCx, _propCy, _propW, _propH, _propR, _propT, _propProj, _propRenderMode, _propZTest;
@@ -64,7 +64,7 @@ public class SplatBaseCorrector : FrameProvider {
         if (intrinsicProvider == null) throw new NullReferenceException("SplatBaseCorrector: intrinsicProvider not assigned");
         if (outputMeters == null) throw new NullReferenceException("SplatBaseCorrector: outputMeters not assigned");
 
-        splatManager.OnSplatReady += OnSplatReady;
+        splatManager.OnReady += OnSplatReady;
         depthSource.OnAsyncFrameStarted += OnDepthJobStarted;
         depthSource.OnAsyncFrameCanceled += OnDepthJobCanceled;
 
@@ -85,7 +85,7 @@ public class SplatBaseCorrector : FrameProvider {
     }
 
     private void OnDisable(){
-        if (splatManager != null) splatManager.OnSplatReady -= OnSplatReady;
+        if (splatManager != null) splatManager.OnReady -= OnSplatReady;
         if (depthSource != null){
             depthSource.OnAsyncFrameStarted -= OnDepthJobStarted;
             depthSource.OnAsyncFrameCanceled -= OnDepthJobCanceled;
@@ -135,7 +135,7 @@ public class SplatBaseCorrector : FrameProvider {
         }
     }
 
-    private void OnSplatReady(Splat splat){
+    private void OnSplatReady(PointCloud splat){
         _currentSplat = splat;
         _lastCompletedJobId = splat.JobId;
         InitOutputOnce();

@@ -3,9 +3,9 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 [DisallowMultipleComponent]
-public class SplatCorrector : FrameProvider {
+public class PcdCorrector : FrameProvider {
     [Header("Inputs")]
-    [SerializeField] protected SplatManager splatManager;
+    [SerializeField] protected StructureManager structureManager;
     [SerializeField] protected PoseDiffManager poseDiff; // provides job-relative rotation/translation
 
     [Header("Output (meters)")]
@@ -32,19 +32,19 @@ public class SplatCorrector : FrameProvider {
     private float _fxPx, _fyPx, _cxPx, _cyPx;
     private int _imgW, _imgH;
 
-    protected Splat _currentSplat;
+    protected PointCloud _currentSplat;
     protected Guid _lastCompletedJobId = Guid.Empty;
 
     private int _propPoints, _propFx, _propFy, _propCx, _propCy, _propW, _propH, _propR, _propT, _propProj, _propRenderMode, _propZTest;
 
     protected virtual void OnEnable(){
-        if (splatManager == null) throw new NullReferenceException("SplatCorrector: splatManager not assigned");
+        if (structureManager == null) throw new NullReferenceException("SplatCorrector: splatManager not assigned");
         if (poseDiff == null) throw new NullReferenceException("SplatCorrector: poseDiff not assigned");
         if (splatTransformMaterial == null) throw new NullReferenceException("SplatCorrector: splatTransformMaterial not assigned");
         if (intrinsicProvider == null) throw new NullReferenceException("SplatCorrector: intrinsicProvider not assigned");
         if (outputMeters == null) throw new NullReferenceException("SplatCorrector: outputMeters not assigned");
 
-        splatManager.OnSplatReady += OnSplatReady;
+        structureManager.OnReady += OnSplatReady;
 
         _propPoints = Shader.PropertyToID("_Points");
         _propFx = Shader.PropertyToID("_FxPx");
@@ -63,7 +63,7 @@ public class SplatCorrector : FrameProvider {
     }
 
     protected virtual void OnDisable(){
-        if (splatManager != null) splatManager.OnSplatReady -= OnSplatReady;
+        if (structureManager != null) structureManager.OnReady -= OnSplatReady;
     }
 
     private System.Collections.IEnumerator WaitForIntrinsics(){
@@ -110,7 +110,7 @@ public class SplatCorrector : FrameProvider {
         }
     }
 
-    private void OnSplatReady(Splat splat){
+    private void OnSplatReady(PointCloud splat){
         _currentSplat = splat;
         _lastCompletedJobId = splat.JobId;
         InitOutputOnce();
