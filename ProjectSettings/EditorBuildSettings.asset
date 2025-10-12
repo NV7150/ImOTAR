@@ -62,13 +62,13 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/TestUseCaseMR_896x672.unity
     guid: 4733a3778e166484893f47886df539ed
-  - enabled: 0
+  - enabled: 1
     path: Assets/Scenes/TestUseCaseMR_896x672_StateBase.unity
     guid: df1c20cdd9d0b492a800d6d4780079eb
   - enabled: 0
     path: Assets/Scenes/Calibration_896x672.unity
     guid: 006d15a6dd9964a66b09da7e8d0415a4
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/MR_896x672_Poisson.unity
     guid: 013252bf4d04047df959a65ddf5735c0
   m_configObjects:
