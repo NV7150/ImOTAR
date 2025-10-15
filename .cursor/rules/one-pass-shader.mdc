@@ -3,6 +3,4 @@ description: "シェーダはすべてワンパスで"
 globs:
 alwaysApply: true
 ---
-To avoid the comute buffer order problem, please do not use any intermidiate RenderTexture.
-Write to output RenderTexture directly as much as possible.
-If you cannot do it, please notify me.
+To avoid GPU buffer order problem, do not split shaders of one process and do not use temporal RT. Also, write the output to output RT directory, do not receive computed output in intermidiate RT.

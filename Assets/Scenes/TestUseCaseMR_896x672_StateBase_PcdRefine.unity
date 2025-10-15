@@ -191,6 +191,64 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 24635884}
   m_CullTransparentMesh: 1
+--- !u!1 &129897543
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 129897544}
+  - component: {fileID: 129897545}
+  m_Layer: 0
+  m_Name: Structure
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &129897544
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 129897543}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1927989996}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &129897545
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 129897543}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a911cf909393409c86df1e310a28ba8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  depthSource: {fileID: 730045953}
+  intrinsicProvider: {fileID: 2135528722}
+  filterCreator: {fileID: 7200000, guid: f7326e4796ecb4c9183c33e7bd29c76a, type: 3}
+  rScale: 1.5
+  rMin: 0.0005
+  rMax: 0.05
+  enableFilter: 1
+  neighborWin: 3
+  minNeighbor: 2
+  depthBandAbs: 0.003
+  depthBandRel: 0.03
+  verboseLogging: 0
+  useDebugCompute: 0
+  logPrefix: '[FilteredSplatManager]'
 --- !u!1 &132145015
 GameObject:
   m_ObjectHideFlags: 0
@@ -1195,7 +1253,7 @@ MonoBehaviour:
   processor: {fileID: 758036908}
   stepsPerFrame: 12
   state: {fileID: 132145016}
-  logVerbose: 1
+  logVerbose: 0
   logPrefix: '[StateEstimate]'
 --- !u!1 &740969779
 GameObject:
@@ -1277,7 +1335,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   poseDiff: {fileID: 535656709}
   state: {fileID: 132145016}
-  splat: {fileID: 988747941}
+  splat: {fileID: 129897545}
   rotDegThreshDeg: {x: 30, y: 30, z: 30}
   posThreshMeters: {x: 0.1, y: 0.1, z: 0.1}
   rotationProjection: 0
@@ -1334,7 +1392,7 @@ MonoBehaviour:
   reverseInputWH: 0
   backendType: 256
   completionFrameDelay: 1
-  verboseLogging: 1
+  verboseLogging: 0
   logPrefix: '[PromptDA-ITER(NLB)]'
   cameraRec: {fileID: 1969467336}
   depthRec: {fileID: 1317386197}
@@ -1421,59 +1479,6 @@ Transform:
   - {fileID: 730045952}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &988747939
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 988747940}
-  - component: {fileID: 988747941}
-  m_Layer: 0
-  m_Name: Splat
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &988747940
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 988747939}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 1927989996}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &988747941
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 988747939}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8561b5624f0e54f669e4aeb6ce077a07, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  depthSource: {fileID: 730045953}
-  intrinsicProvider: {fileID: 2135528722}
-  splatCreator: {fileID: 7200000, guid: d391f97b89d99434dabfa26677a1467e, type: 3}
-  rScale: 1.5
-  rMin: 0.00005
-  rMax: 0.05
-  verboseLogging: 0
-  useDebugCompute: 0
-  logPrefix: '[SplatManager]'
 --- !u!1 &996310576
 GameObject:
   m_ObjectHideFlags: 0
@@ -2352,7 +2357,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   state: {fileID: 132145016}
-  corrected: {fileID: 1338922189}
+  corrected: {fileID: 1927989997}
   immediate: {fileID: 1317386197}
   stitchMaterial: {fileID: 2100000, guid: 1115b8bc3a6fa4ed6909555efdc9d68b, type: 2}
   output: {fileID: 8400000, guid: 6e11a9da2a44f4d4c83e4c803094b056, type: 2}
@@ -3139,7 +3144,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 988747940}
+  - {fileID: 129897544}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1927989997
@@ -3154,7 +3159,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b39b627f8e52347ca945e19257e29680, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  structureManager: {fileID: 988747941}
+  structureManager: {fileID: 129897545}
   poseDiff: {fileID: 535656709}
   outputMeters: {fileID: 8400000, guid: 0c06b4f5c3e1c44979a73699b993d424, type: 2}
   splatTransformMaterial: {fileID: 2100000, guid: 0997fd7bd46a7481896e17540a30a6c6, type: 2}
@@ -3315,7 +3320,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   diff: {fileID: 535656709}
-  stu: {fileID: 988747941}
+  stu: {fileID: 129897545}
   text: {fileID: 1951123226}
 --- !u!1 &1956616878
 GameObject:

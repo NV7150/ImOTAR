@@ -1,0 +1,114 @@
+#pragma kernel CSMain
+
+// Prevent empty SRV set warnings on some drivers
+StructuredBuffer<float> _Dummy;
+
+// Inputs
+Texture2D<float> _DepthTex; // depth in meters
+SamplerState sampler_linear_clamp; // not used (we use Load)
+
+// Outputs
+RWStructuredBuffer<float4> _Points; // xyz = camera-space [m], w = radius [m]; holes: w = -1
+RWStructuredBuffer<uint> _ValidCount; // optional: increment on keep (debug)
+
+// Image size
+int _Width;
+int _Height;
+
+// Intrinsics (in pixels)
+float _FxPx;
+float _FyPx;
+float _CxPx;
+float _CyPx;
+
+// Radius params
+float _RScale; // r = _RScale * z / _FxPx
+float _RMin;
+float _RMax;
+
+// Filter params
+int _EnableFilter;   // 0/1
+int _NeighborWin;    // 3 or 5
+int _MinNeighbor;    // inclusive
+float _DepthBandAbs; // meters
+float _DepthBandRel; // ratio
+
+static const uint THREADS_X = 8;
+static const uint THREADS_Y = 8;
+static const int MAX_HALF_WIN = 2; // for up to 5x5
+
+[numthreads(THREADS_X, THREADS_Y, 1)]
+void CSMain (uint3 id : SV_DispatchThreadID){
+    if (id.x >= (uint)_Width || id.y >= (uint)_Height) return;
+
+    uint idx = id.y * (uint)_Width + id.x;
+
+    int2 uv = int2(id.xy);
+    float z = _DepthTex.Load(int3(uv, 0));
+    float cFinite = isfinite(z) ? 1.0 : 0.0;
+    float cPos    = step(0.0, z) - step(0.0, -z); // 1 if z > 0
+    float cValid  = cFinite * cPos;
+
+    // project to camera space (meters)
+    float u = (float)uv.x + 0.5;
+    float v = (float)uv.y + 0.5;
+    float x = ((u - _CxPx) / _FxPx) * z;
+    float y = ((v - _CyPx) / _FyPx) * z;
+
+    // radius in meters: r = rScale * z / fx_px, clamped
+    float r = (_RScale * z) / _FxPx;
+    r = clamp(r, _RMin, _RMax);
+    // O(N) neighborhood filter in image space using masks only
+    int halfWin = (_NeighborWin == 5) ? 2 : 1;
+    float band = max(_DepthBandAbs, _DepthBandRel * z);
+
+    uint cnt = 0u;
+    [unroll]
+    for (int dy = -MAX_HALF_WIN; dy <= MAX_HALF_WIN; ++dy)
+    {
+        [unroll]
+        for (int dx = -MAX_HALF_WIN; dx <= MAX_HALF_WIN; ++dx)
+        {
+            float mx = 1.0 - step((float)(halfWin + 0.5), abs((float)dx));
+            float my = 1.0 - step((float)(halfWin + 0.5), abs((float)dy));
+            float inWin = mx * my;
+
+            float notSelf = step(0.5, abs((float)dx) + abs((float)dy));
+
+            int2 p = uv + int2(dx, dy);
+            // clamp for safe load; mask will zero-out OOB contributions
+            int2 pc = int2(clamp(p.x, 0, _Width - 1), clamp(p.y, 0, _Height - 1));
+            float inX = step(0.0, (float)p.x) * step((float)p.x, (float)(_Width - 1));
+            float inY = step(0.0, (float)p.y) * step((float)p.y, (float)(_Height - 1));
+            float inB = inX * inY;
+
+            float zn = _DepthTex.Load(int3(pc, 0));
+            float nFinite = isfinite(zn) ? 1.0 : 0.0;
+            float nPos    = step(0.0, zn) - step(0.0, -zn);
+            float nValid  = nFinite * nPos;
+
+            float dz = abs(zn - z);
+            float within = 1.0 - step(band, dz);
+
+            float use = inWin * notSelf * inB;
+            float add = use * nValid * within;
+            cnt += (uint)(add + 0.5);
+        }
+    }
+
+    // filter enable mask
+    float filtOn = step(0.5, abs((float)_EnableFilter));
+    float acc = step((float)_MinNeighbor, (float)cnt);
+    float keep = cValid * ( (1.0 - filtOn) + filtOn * acc );
+
+    float4 hole = float4(u, v, 0.0, -1.0);
+    float4 valp = float4(x, y, z, r);
+    float4 outp = keep * valp + (1.0 - keep) * hole;
+    _Points[idx] = outp;
+
+    uint inc = (uint)(keep + 0.5);
+    uint baseIdx;
+    InterlockedAdd(_ValidCount[0], inc, baseIdx);
+}
+
+
