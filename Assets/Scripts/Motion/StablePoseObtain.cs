@@ -88,10 +88,6 @@ public class StablePoseObtain : MotionObtainBase {
         );
         Record(refData);
 
-        // Mirror absolute for consumers that read from this wrapper
-        Record(new AbsoluteRotationData(ts, rot));
-        Record(new AbsolutePositionData(ts, pos));
-
         _prevTs = ts;
         _prevRot = rot;
         _prevPos = pos;
@@ -101,6 +97,30 @@ public class StablePoseObtain : MotionObtainBase {
         if (!TryGetLatestData<ReferencePoseData>(out data)) return false;
         float ageMs = (float)(DateTime.UtcNow - data.Timestamp).TotalMilliseconds;
         return ageMs <= maxReferenceAgeMs;
+    }
+
+    public override bool TryGetLatestData<T>(out T data){
+        if (typeof(T) == typeof(ReferencePoseData)){
+            return base.TryGetLatestData(out data);
+        }
+        if (source == null) throw new NullReferenceException("StablePoseObtain: source not assigned");
+        return source.TryGetLatestData(out data);
+    }
+
+    public override int CopyHistory<T>(DateTime from, DateTime to, Span<T> dst){
+        if (typeof(T) == typeof(ReferencePoseData)){
+            return base.CopyHistory(from, to, dst);
+        }
+        if (source == null) throw new NullReferenceException("StablePoseObtain: source not assigned");
+        return source.CopyHistory(from, to, dst);
+    }
+
+    public override int CopyLastN<T>(int n, Span<T> dst){
+        if (typeof(T) == typeof(ReferencePoseData)){
+            return base.CopyLastN(n, dst);
+        }
+        if (source == null) throw new NullReferenceException("StablePoseObtain: source not assigned");
+        return source.CopyLastN(n, dst);
     }
 }
 

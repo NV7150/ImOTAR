@@ -2763,7 +2763,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   historyCapacityPerType: 256
   source: {fileID: 230356828}
-  stableTimeMs: 200
+  stableTimeMs: 400
   rotVelStableDegPerSec: 2
   posVelStableMps: 0.01
   smoothFactor: 0.2
@@ -3216,7 +3216,7 @@ MonoBehaviour:
   intrinsicProvider: {fileID: 2135528722}
   nearMeters: 0.03
   farMeters: 20
-  verboseLogging: 0
+  verboseLogging: 1
   useDebugShader: 0
   logPrefix: '[SplatCorrector]'
   state: {fileID: 132145016}
@@ -3649,7 +3649,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   motion: {fileID: 1463086691}
   state: {fileID: 132145016}
-  stableTimeMs: 300
   logVerbose: 0
   logPrefix: '[BirthByMotion]'
 --- !u!1 &2105656094
