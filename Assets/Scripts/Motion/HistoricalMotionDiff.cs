@@ -8,6 +8,9 @@ public class HistoricalMotionDiff : PoseDiffManager {
     [SerializeField] private AsyncFrameProvider provider;  // Async job lifecycle
     [SerializeField] private MotionObtain motion;          // Absolute pose source
 
+    [Header("Reference Freshness")]
+    [SerializeField, Min(1f)] private float maxReferenceAgeMs = 200f;
+
     [Header("Debug")]
     [SerializeField] private bool logVerbose = false;
     [SerializeField] private string logPrefix = "[HistoricalMotionDiff]";
@@ -44,23 +47,42 @@ public class HistoricalMotionDiff : PoseDiffManager {
     }
 
     private void OnJobStarted(Guid jobId){
-        // Capture snapshot for this generation if data available
-        if (!motion.TryGetLatestData<AbsoluteRotationData>(out var r)){
-            if (logVerbose) 
-                Debug.LogWarning($"{logPrefix} Rotation unavailable at job start: {jobId}");
-            return;
-        }
-        if (!motion.TryGetLatestData<AbsolutePositionData>(out var p)){
-            if (logVerbose) 
-                Debug.LogWarning($"{logPrefix} Position unavailable at job start: {jobId}");
-            return;
+        // Prefer ReferencePoseData if fresh enough; otherwise fall back to absolute pose
+        Quaternion baseRot = Quaternion.identity;
+        Vector3 basePos = Vector3.zero;
+
+        var now = DateTime.UtcNow;
+        bool tookReference = false;
+        if (motion.TryGetLatestData<ReferencePoseData>(out var refPose)){
+            float ageMs = (float)(now - refPose.Timestamp).TotalMilliseconds;
+            if (ageMs <= maxReferenceAgeMs && refPose.IsStable){
+                baseRot = refPose.Rotation;
+                basePos = refPose.Position;
+                tookReference = true;
+            } else if (logVerbose){
+                Debug.LogWarning($"{logPrefix} ReferencePose stale or unstable (ageMs={ageMs:F1}) at job start: {jobId}");
+            }
         }
 
-        var ts = DateTime.UtcNow;
-        _history[jobId] = new Snapshot(ts, r.Rotation, p.Position);
+        if (!tookReference){
+            if (!motion.TryGetLatestData<AbsoluteRotationData>(out var r)){
+                if (logVerbose)
+                    Debug.LogWarning($"{logPrefix} Rotation unavailable at job start: {jobId}");
+                return;
+            }
+            if (!motion.TryGetLatestData<AbsolutePositionData>(out var p)){
+                if (logVerbose)
+                    Debug.LogWarning($"{logPrefix} Position unavailable at job start: {jobId}");
+                return;
+            }
+            baseRot = r.Rotation;
+            basePos = p.Position;
+        }
+
+        _history[jobId] = new Snapshot(now, baseRot, basePos);
         _latestGen = jobId;
-        _latestBaselineTs = ts;
-        if (logVerbose) Debug.Log($"{logPrefix} Capture baseline gen={_latestGen} ts={_latestBaselineTs:O}");
+        _latestBaselineTs = now;
+        if (logVerbose) Debug.Log($"{logPrefix} Capture baseline gen={_latestGen} ts={_latestBaselineTs:O} (ref={tookReference})");
     }
 
     private void OnJobCanceled(Guid jobId){

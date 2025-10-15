@@ -192,8 +192,8 @@ public class PcdCorrector : FrameProvider {
     protected virtual bool TryGetRelative(Guid jobId, out Quaternion R, out Vector3 t){
         R = Quaternion.identity;
         t = Vector3.zero;
-        if (poseDiff == null) return false;
-
+        if (poseDiff == null)
+            return false;
 
         if (!poseDiff.TryGetDiffFrom(jobId, out t, out R)){
             if (verboseLogging) 

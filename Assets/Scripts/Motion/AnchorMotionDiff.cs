@@ -70,7 +70,8 @@ public sealed class AnchorMotionDiff : PoseDiffManager {
         pos = Vector3.zero;
         rot = Quaternion.identity;
 
-        if (generation == Guid.Empty) return false;
+        if (generation == Guid.Empty) 
+            return false;
         var hasCurrR = motion.TryGetLatestData<AbsoluteRotationData>(out var currR);
         var hasCurrP = motion.TryGetLatestData<AbsolutePositionData>(out var currP);
         if (!hasCurrR || !hasCurrP){
