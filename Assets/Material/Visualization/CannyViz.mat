@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: CannyViz
-  m_Shader: {fileID: 4800000, guid: e77cef79fbf434d14abf121606993b7c, type: 3}
+  m_Shader: {fileID: 4800000, guid: 209d7f4f13e1f4419a1dfa67069f2f89, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []

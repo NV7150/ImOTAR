@@ -21,7 +21,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: 3DCorrector_Elipse
-  m_Shader: {fileID: 4800000, guid: a402406afc18d4e849757b65651cd3b2, type: 3}
+  m_Shader: {fileID: 4800000, guid: c07d40d0880814b2590de4dc93d45c5d, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []

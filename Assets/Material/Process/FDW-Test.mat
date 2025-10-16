@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: FDW-Test
-  m_Shader: {fileID: 4800000, guid: e69f87e784eb14dc29a6d29b239b63af, type: 3}
+  m_Shader: {fileID: 4800000, guid: d1171b737f560498f98fc379925801b7, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []

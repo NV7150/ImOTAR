@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: MeterTranser
-  m_Shader: {fileID: 4800000, guid: 4cb1d5fd59c7945cd98b18f1c270a75d, type: 3}
+  m_Shader: {fileID: 4800000, guid: 1eac78aceb5254d6fa762e0ad9c0d7ab, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []

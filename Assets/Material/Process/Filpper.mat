@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: Filpper
-  m_Shader: {fileID: 4800000, guid: af49d8a4636e945dda05a7a218399c7f, type: 3}
+  m_Shader: {fileID: 4800000, guid: 8be4ae51774f345cead2a48a2c7c9fea, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []

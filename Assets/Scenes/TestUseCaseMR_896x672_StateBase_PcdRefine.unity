@@ -237,7 +237,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   depthSource: {fileID: 730045953}
   intrinsicProvider: {fileID: 2135528722}
-  filterCreator: {fileID: 7200000, guid: f7326e4796ecb4c9183c33e7bd29c76a, type: 3}
+  filterCreator: {fileID: 7200000, guid: e6d122068c3c54405ae8fb1a8ed41e9e, type: 3}
   rScale: 1.5
   rMin: 0.0005
   rMax: 0.05
@@ -1621,69 +1621,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1020293745}
   m_CullTransparentMesh: 1
---- !u!1 &1071408787
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1071408789}
-  - component: {fileID: 1071408788}
-  - component: {fileID: 1071408790}
-  m_Layer: 0
-  m_Name: Debug
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1071408788
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1071408787}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fab0762990e6f41eb886cae2293534c8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  targetProvider: {fileID: 0}
-  logOnUpdate: 1
-  printSamples: 0
---- !u!4 &1071408789
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1071408787}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1113.3716, y: 445.73206, z: -60.69092}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1071408790
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1071408787}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 08e355ab72bef4d9a936d33f5be57a82, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  targetProvider: {fileID: 0}
-  logOnUpdate: 0
-  printSamples: 0
 --- !u!1 &1107688465
 GameObject:
   m_ObjectHideFlags: 0
@@ -2351,7 +2288,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1449372847}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5eb4fea54011f4233b9838790f19fbc0, type: 3}
+  m_Script: {fileID: 11500000, guid: 5a123c2cbf0fe4b9ba3029bfb192609c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   state: {fileID: 132145016}
@@ -3144,7 +3081,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4b5523cdea84b4ab6a69322df8eaaf7d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  src: {fileID: 1956616880}
+  src: {fileID: 0}
   targetRT: {fileID: 8400000, guid: 4220d428c48f34cefbb6251ae7ce2541, type: 2}
   material: {fileID: 2100000, guid: c19943b4ea274468f84a50c4ede19a2c, type: 2}
   clipDist: 1.5
@@ -3216,7 +3153,7 @@ MonoBehaviour:
   intrinsicProvider: {fileID: 2135528722}
   nearMeters: 0.03
   farMeters: 20
-  verboseLogging: 1
+  verboseLogging: 0
   useDebugShader: 0
   logPrefix: '[SplatCorrector]'
   state: {fileID: 132145016}
@@ -3413,14 +3350,14 @@ MonoBehaviour:
   m_GameObject: {fileID: 1956616878}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bab7be1585f6d404e933e9c779ee6211, type: 3}
+  m_Script: {fileID: 11500000, guid: 7dcaedf4d052943549e114b96042b5e3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   verboseLogs: 0
   depthProvider: {fileID: 1449372850}
   edgeProvider: {fileID: 1731761570}
-  guidedCompute: {fileID: 7200000, guid: 2dcb3ee3c565d422aa7c7b5f149de7d9, type: 3}
-  radius: 3
+  guidedCompute: {fileID: 7200000, guid: bd11de9719dcb4d84ab21aa8c8faf113, type: 3}
+  radius: 8
   epsilon: 0.0004
   edgeEpsScale: 4
   output: {fileID: 8400000, guid: 65ac76abb68e54d62b9a6daeffe41aeb, type: 2}
@@ -3792,7 +3729,6 @@ SceneRoots:
   - {fileID: 1927989996}
   - {fileID: 1608248577}
   - {fileID: 1463086692}
-  - {fileID: 1071408789}
   - {fileID: 2135528723}
   - {fileID: 298075210}
   - {fileID: 1449372849}

@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: Depth
-  m_Shader: {fileID: 4800000, guid: e77cef79fbf434d14abf121606993b7c, type: 3}
+  m_Shader: {fileID: 4800000, guid: 7947e5707f8c14b2f9866b6e30ea00cc, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []

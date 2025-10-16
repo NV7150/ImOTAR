@@ -21,7 +21,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: Rotator
-  m_Shader: {fileID: 4800000, guid: e0c858ce17c494c9a8ced3e618608b43, type: 3}
+  m_Shader: {fileID: 4800000, guid: b7890d18932964dfb955a46f33dbc4b5, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []

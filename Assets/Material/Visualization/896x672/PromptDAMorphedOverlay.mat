@@ -21,7 +21,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: PromptDAMorphedOverlay
-  m_Shader: {fileID: 4800000, guid: 00c336e0163e843399bb49894d96a2ee, type: 3}
+  m_Shader: {fileID: 4800000, guid: 3e3091339bb0947d2aefae15c387ee6b, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -117,7 +117,7 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
-    - _Max: 10
+    - _Max: 5
     - _Metallic: 0
     - _Min: 0
     - _OcclusionStrength: 1
