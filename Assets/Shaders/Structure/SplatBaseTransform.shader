@@ -47,14 +47,12 @@ Shader "ImOTAR/SplatBaseTransform" {
                 float4 p = _Points[pointIndex];
                 float r = p.w;
 
-                // Early reject based on render mode (minimal branching)
-                bool isHole = (r < 0.0);
-                if ((_RenderMode == 0 && isHole) || (_RenderMode == 1 && !isHole)){
-                    // send off-screen
-                    o.posCS = float4(0, 0, 0, 0);
-                    o.depthM = -1.0;
-                    return o;
-                }
+                // Branchless selection mask: draw valid when _RenderMode==0, draw holes when _RenderMode==1
+                // holeMask = 1 when r<0, else 0
+                float holeMask = 1.0 - step(0.0, r);
+                float validMask = 1.0 - holeMask;
+                float modeHole = saturate((float)_RenderMode); // 0 or 1
+                float drawMask = lerp(validMask, holeMask, modeHole); // 1=draw, 0=skip
 
                 // Transform to current camera frame
                 float3 x0 = p.xyz;
@@ -75,8 +73,13 @@ Shader "ImOTAR/SplatBaseTransform" {
                 float X = (u - _CxPx) * x1.z / _FxPx;
                 float Y = (v - _CyPx) * x1.z / _FyPx;
                 float4 cam = float4(X, Y, x1.z, 1.0);
-                o.posCS = mul(_Proj, cam);
-                o.depthM = x1.z;
+                float4 pos = mul(_Proj, cam);
+
+                // Push non-drawn primitives fully outside clip rect (keep w>0)
+                static const float OFF_NDC = 2.0;
+                float4 offPos = float4(OFF_NDC, OFF_NDC, 1.0, 1.0);
+                o.posCS = lerp(offPos, pos, drawMask);
+                o.depthM = lerp(-1.0, x1.z, drawMask);
                 return o;
             }
 

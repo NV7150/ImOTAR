@@ -22,6 +22,9 @@ public class FilteredStructureManager : StructureManager {
     [SerializeField] private float depthBandAbs = 0.003f; // meters
     [SerializeField] private float depthBandRel = 0.03f;  // ratio
 
+    [Header("Validity")]
+    [SerializeField] private float zPosEps = 1e-6f; // z>=eps is valid
+
     [Header("Debug")] 
     [SerializeField] private bool verboseLogging = true;
     [SerializeField] private bool useDebugCompute = false;
@@ -34,7 +37,7 @@ public class FilteredStructureManager : StructureManager {
 
     private int _kernel;
     private int _propDepthTex, _propPoints, _propW, _propH, _propFx, _propFy, _propCx, _propCy, _propRScale, _propRMin, _propRMax, _propValidCount;
-    private int _propEnableFilter, _propNeighborWin, _propMinNeighbor, _propDepthBandAbs, _propDepthBandRel;
+    private int _propEnableFilter, _propNeighborWin, _propMinNeighbor, _propDepthBandAbs, _propDepthBandRel, _propZPosEps;
 
     private PointCloud _currentSplat;
 
@@ -62,6 +65,7 @@ public class FilteredStructureManager : StructureManager {
         _propMinNeighbor  = Shader.PropertyToID("_MinNeighbor");
         _propDepthBandAbs = Shader.PropertyToID("_DepthBandAbs");
         _propDepthBandRel = Shader.PropertyToID("_DepthBandRel");
+        _propZPosEps      = Shader.PropertyToID("_ZPosEps");
 
         depthSource.OnAsyncFrameUpdated += OnDepthJobCompleted;
         depthSource.OnAsyncFrameCanceled += OnDepthJobCanceled;
@@ -147,6 +151,7 @@ public class FilteredStructureManager : StructureManager {
         filterCreator.SetFloat(_propRScale, rScale);
         filterCreator.SetFloat(_propRMin, rMin);
         filterCreator.SetFloat(_propRMax, rMax);
+        filterCreator.SetFloat(_propZPosEps, zPosEps);
 
         // filter params
         filterCreator.SetInt(_propEnableFilter, enableFilter ? 1 : 0);
@@ -159,12 +164,10 @@ public class FilteredStructureManager : StructureManager {
         int gy = (h + 7) / 8;
         filterCreator.Dispatch(_kernel, gx, gy, 1);
 
-        // debug
-        if (useDebugCompute){
-            uint[] countData = new uint[1];
-            validCount.GetData(countData);
-            if (verboseLogging) Debug.Log($"{logPrefix} Valid points: {countData[0]} / {count}");
-        }
+        // read valid count (for debug) and dispose
+        uint[] countData = new uint[1];
+        validCount.GetData(countData);
+        if (verboseLogging) Debug.Log($"{logPrefix} Valid points: {countData[0]} / {count}");
         validCount.Dispose();
 
         // replace current splat
@@ -172,6 +175,7 @@ public class FilteredStructureManager : StructureManager {
             _currentSplat.Dispose();
             _currentSplat = null;
         }
+        // Use full buffer length; shader will mask out holes at draw
         _currentSplat = new PointCloud(points, count, frame.Id);
         if (verboseLogging)
             Debug.Log($"{logPrefix} Splat ready id={frame.Id} count={count}");

@@ -169,16 +169,17 @@ public class PcdCorrector : FrameProvider {
         Graphics.ExecuteCommandBuffer(cb);
         cb.Release();
         int vertexCount = _currentSplat.Count * 6; // 2 triangles per quad
-        if (verboseLogging) Debug.Log($"{logPrefix} Drawing {_currentSplat.Count} points, {vertexCount} vertices");
+        if (verboseLogging)
+            Debug.Log($"{logPrefix} Drawing {_currentSplat.Count} points, {vertexCount} vertices");
 
         splatTransformMaterial.SetInt(_propRenderMode, 0);
         splatTransformMaterial.SetPass(0);
         Graphics.DrawProceduralNow(MeshTopology.Triangles, vertexCount, 1);
 
-        splatTransformMaterial.SetInt(_propRenderMode, 1);
-        splatTransformMaterial.SetPass(0);
-        Graphics.DrawProceduralNow(MeshTopology.Triangles, vertexCount, 1);
-        RenderTexture.active = active;
+        // splatTransformMaterial.SetInt(_propRenderMode, 1);
+        // splatTransformMaterial.SetPass(0);
+        // Graphics.DrawProceduralNow(MeshTopology.Triangles, vertexCount, 1);
+        // RenderTexture.active = active;
 
         _timestamp = DateTime.Now;
         TickUp();

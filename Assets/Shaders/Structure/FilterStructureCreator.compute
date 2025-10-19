@@ -33,6 +33,9 @@ int _MinNeighbor;    // inclusive
 float _DepthBandAbs; // meters
 float _DepthBandRel; // ratio
 
+// Depth positive threshold (meters) to treat as valid (avoid z<=0)
+float _ZPosEps;
+
 static const uint THREADS_X = 8;
 static const uint THREADS_Y = 8;
 static const int MAX_HALF_WIN = 2; // for up to 5x5
@@ -46,8 +49,9 @@ void CSMain (uint3 id : SV_DispatchThreadID){
     int2 uv = int2(id.xy);
     float z = _DepthTex.Load(int3(uv, 0));
     float cFinite = isfinite(z) ? 1.0 : 0.0;
-    float cPos    = step(0.0, z) - step(0.0, -z); // 1 if z > 0
-    float cValid  = cFinite * cPos;
+    // Valid depth: z >= _ZPosEps (no negative values)
+    float cPos    = step(_ZPosEps, z);
+    float cValid  = saturate(cFinite * cPos);
 
     // project to camera space (meters)
     float u = (float)uv.x + 0.5;
@@ -84,31 +88,34 @@ void CSMain (uint3 id : SV_DispatchThreadID){
 
             float zn = _DepthTex.Load(int3(pc, 0));
             float nFinite = isfinite(zn) ? 1.0 : 0.0;
-            float nPos    = step(0.0, zn) - step(0.0, -zn);
-            float nValid  = nFinite * nPos;
+            float nPos    = step(_ZPosEps, zn);
+            float nValid  = saturate(nFinite * nPos);
 
             float dz = abs(zn - z);
             float within = 1.0 - step(band, dz);
 
             float use = inWin * notSelf * inB;
             float add = use * nValid * within;
-            cnt += (uint)(add + 0.5);
+            // Ensure 0 or 1 contribution only
+            cnt += (uint)(saturate(add));
         }
     }
 
     // filter enable mask
     float filtOn = step(0.5, abs((float)_EnableFilter));
     float acc = step((float)_MinNeighbor, (float)cnt);
-    float keep = cValid * ( (1.0 - filtOn) + filtOn * acc );
+    float keep = saturate(cValid * ( (1.0 - filtOn) + filtOn * acc ));
 
+    // Write per-pixel output (no compaction): holes have w<0, valid have w>=0
     float4 hole = float4(u, v, 0.0, -1.0);
     float4 valp = float4(x, y, z, r);
-    float4 outp = keep * valp + (1.0 - keep) * hole;
+    float4 outp = lerp(hole, valp, keep);
     _Points[idx] = outp;
 
-    uint inc = (uint)(keep + 0.5);
-    uint baseIdx;
-    InterlockedAdd(_ValidCount[0], inc, baseIdx);
+    // Count valid points (branchless)
+    uint inc = (uint)(keep);
+    uint dummy;
+    InterlockedAdd(_ValidCount[0], inc, dummy);
 }
 
 
