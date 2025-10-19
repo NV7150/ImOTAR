@@ -159,7 +159,7 @@ public class PcdCorrector : FrameProvider {
         splatTransformMaterial.SetInt(_propH, outputMeters.height);
         splatTransformMaterial.SetMatrix(_propR, Matrix4x4.Rotate(relRotSC));
         splatTransformMaterial.SetVector(_propT, relPos);
-        splatTransformMaterial.SetMatrix(_propProj, IntrinsicScaler.BuildProjectionMatrix(scaledIntrinsics, outputMeters.width, outputMeters.height, nearMeters, farMeters));
+        splatTransformMaterial.SetMatrix(_propProj, IntrinsicScaler.BuildProjectionMatrix(intrinsics, outputMeters.width, outputMeters.height, nearMeters, farMeters));
 
         var active = RenderTexture.active;
         RenderTexture.active = outputMeters;

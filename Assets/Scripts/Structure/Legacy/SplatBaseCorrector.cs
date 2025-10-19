@@ -220,6 +220,8 @@ public class SplatBaseCorrector : FrameProvider {
         splatTransformMaterial.SetInt(_propH, outputMeters.height);
         splatTransformMaterial.SetMatrix(_propR, Matrix4x4.Rotate(relRotSC));
         splatTransformMaterial.SetVector(_propT, relPos);
+        // NOTE: Passing scaled intrinsics here can lead to double-scaling in BuildProjectionMatrix,
+        // which also scales internally. Left as-is for legacy; if re-enabling, switch to raw intrinsics.
         splatTransformMaterial.SetMatrix(_propProj, IntrinsicScaler.BuildProjectionMatrix(scaledIntrinsics, outputMeters.width, outputMeters.height, nearMeters, farMeters));
 
         // Draw to output
