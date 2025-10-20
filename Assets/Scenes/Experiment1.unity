@@ -772,6 +772,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   historyCapacityPerType: 256
+  origin: {fileID: 494610075}
   cameraTransform: {fileID: 1461364217}
 --- !u!4 &230356829
 Transform:
