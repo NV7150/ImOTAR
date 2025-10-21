@@ -28,10 +28,11 @@ float _EdgeEpsScale;// >= 1
 Texture2D<float> _DepthTex;      // RFloat, meters
 Texture2D<float> _EdgeTex;       // RFloat, 0..1 (RGB resolution)
 
-RWTexture2D<float> _GTex;        // guidance resampled to depth grid
-RWTexture2D<float> _PTex;        // depth copy
-RWTexture2D<float> _G2Tex;
-RWTexture2D<float> _GPTex;
+RWTexture2D<float> _GTex;        // masked guidance (G * M) at depth grid
+RWTexture2D<float> _PTex;        // masked depth (P * M)
+RWTexture2D<float> _G2Tex;       // masked G^2 (G*G * M)
+RWTexture2D<float> _GPTex;       // masked G*P ((G*P) * M)
+RWTexture2D<float> _MaskTex;     // binary mask M (1 if depth >= 0 and finite, else 0)
 
 RWTexture2D<float> _TempTex;     // horizontal box sums temp
 RWTexture2D<float> _OutTex;      // vertical box -> mean output
@@ -51,6 +52,13 @@ Texture2D<float> _MeanA;
 Texture2D<float> _MeanB;
 
 RWTexture2D<float> _Output;      // final refined depth
+
+// Mask sums (box-filtered). We reuse the generic box filter to compute sums for all fields.
+Texture2D<float> _MeanM;         // sum of mask over window
+
+// Numerical safety for division by zero in masked means
+float _EpsCount;                  // small positive value
+int _MinValidCount;               // minimum valid samples to keep output
 
 // Helper: clamp to bounds
 int2 ClampCoord(int2 p)
@@ -77,10 +85,17 @@ void KPrep(uint3 id : SV_DispatchThreadID)
     ePix = int2(min(ePix, int2(edgeW - 1, edgeH - 1)));
     float guide = _EdgeTex.Load(int3(ePix, 0));
 
-    _GTex[p]  = guide;
-    _PTex[p]  = depth;
-    _G2Tex[p] = guide * guide;
-    _GPTex[p] = guide * depth;
+    // Build validity mask: 1 if finite and depth >= 0, else 0
+    float mFinite = isfinite(depth) ? 1.0 : 0.0;
+    float mPos    = step(0.0, depth);
+    float M       = saturate(mFinite * mPos);
+
+    // Write masked fields and mask texture
+    _MaskTex[p] = M;
+    _GTex[p]  = guide * M;
+    _PTex[p]  = depth * M;
+    _G2Tex[p] = guide * guide * M;
+    _GPTex[p] = guide * depth * M;
 }
 
 // Horizontal box pass: prefix-like sliding window, clamped borders (minimal implementation)
@@ -113,9 +128,8 @@ void KBoxV(uint3 id : SV_DispatchThreadID)
         q = ClampCoord(q);
         sum += _InTex.Load(int3(q, 0));
     }
-
-    float area = (float)(_KernelSize * _KernelSize);
-    _OutTex[p] = sum / area;
+    // Output raw sum (no normalization here). Means are formed later by dividing by mask sums.
+    _OutTex[p] = sum;
 }
 
 // KCoeff: compute a and b with edge-modulated epsilon
@@ -124,10 +138,18 @@ void KCoeff(uint3 id : SV_DispatchThreadID)
     if (id.x >= _Width || id.y >= _Height) return;
     int2 p = int2(id.xy);
 
-    float meanG  = _MeanG.Load(int3(p, 0));
-    float meanP  = _MeanP.Load(int3(p, 0));
-    float meanG2 = _MeanG2.Load(int3(p, 0));
-    float meanGP = _MeanGP.Load(int3(p, 0));
+    // Read summed fields and mask sum, then form masked means
+    float sumG  = _MeanG.Load(int3(p, 0));
+    float sumP  = _MeanP.Load(int3(p, 0));
+    float sumG2 = _MeanG2.Load(int3(p, 0));
+    float sumGP = _MeanGP.Load(int3(p, 0));
+    float sumM  = _MeanM.Load(int3(p, 0));
+
+    float invDen = rcp(max(sumM, _EpsCount));
+    float meanG  = sumG  * invDen;
+    float meanP  = sumP  * invDen;
+    float meanG2 = sumG2 * invDen;
+    float meanGP = sumGP * invDen;
     float guide  = _GTex[p];
 
     float varG = max(0.0, meanG2 - meanG * meanG);
@@ -148,6 +170,13 @@ void KCompose(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= _Width || id.y >= _Height) return;
     int2 p = int2(id.xy);
-    float q = _MeanA.Load(int3(p, 0)) * _GTex[p] + _MeanB.Load(int3(p, 0));
-    _Output[p] = q;
+    // Normalize meanA/meanB by mask sum and compose, then invalidate when window has no valid samples
+    float sumM = _MeanM.Load(int3(p, 0));
+    float invDen = rcp(max(sumM, _EpsCount));
+    float meanA = _MeanA.Load(int3(p, 0)) * invDen;
+    float meanB = _MeanB.Load(int3(p, 0)) * invDen;
+
+    float q = meanA * _GTex[p] + meanB;
+    float keep = step((float)_MinValidCount - 0.5, sumM);
+    _Output[p] = lerp(-1.0, q, keep);
 }

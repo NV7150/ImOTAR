@@ -49,15 +49,17 @@ public class GuidedRefiner : DepthRefiner
     private int _kCompose;
 
     // Intermediates (all RFloat, depth-sized, UAV)
-    private RenderTexture _gTex;   // guidance at depth grid (edge sampled)
-    private RenderTexture _pTex;   // depth copy
-    private RenderTexture _g2Tex;
-    private RenderTexture _gpTex;
+    private RenderTexture _gTex;   // masked guidance sum input
+    private RenderTexture _pTex;   // masked depth sum input
+    private RenderTexture _g2Tex;  // masked G^2 sum input
+    private RenderTexture _gpTex;  // masked G*P sum input
+    private RenderTexture _mTex;   // mask (0/1)
 
-    private RenderTexture _meanG;
-    private RenderTexture _meanP;
-    private RenderTexture _meanG2;
-    private RenderTexture _meanGP;
+    private RenderTexture _meanG;  // sum(G*M)
+    private RenderTexture _meanP;  // sum(P*M)
+    private RenderTexture _meanG2; // sum(G^2*M)
+    private RenderTexture _meanGP; // sum(G*P*M)
+    private RenderTexture _meanM;  // sum(M)
 
     private RenderTexture _aTex;
     private RenderTexture _bTex;
@@ -206,29 +208,34 @@ public class GuidedRefiner : DepthRefiner
         int gx = Mathf.CeilToInt(w / 16.0f);
         int gy = Mathf.CeilToInt(h / 16.0f);
 
-        // 1) Prepare base fields: G, P, G^2, G*P (at depth grid)
+        // 1) Prepare masked fields: G*M, P*M, G^2*M, G*P*M and mask M
         guidedCompute.SetTexture(_kPrep, "_DepthTex", depth);
         guidedCompute.SetTexture(_kPrep, "_EdgeTex", edgeProvider.FrameTex);
         guidedCompute.SetTexture(_kPrep, "_GTex", _gTex);
         guidedCompute.SetTexture(_kPrep, "_PTex", _pTex);
         guidedCompute.SetTexture(_kPrep, "_G2Tex", _g2Tex);
         guidedCompute.SetTexture(_kPrep, "_GPTex", _gpTex);
+        guidedCompute.SetTexture(_kPrep, "_MaskTex", _mTex);
         guidedCompute.Dispatch(_kPrep, gx, gy, 1);
 
-        // 2) Box means for G, P, G2, GP (separable H then V)
+        // 2) Box sums for G*M, P*M, G^2*M, G*P*M and M (separable H then V)
         BoxFilter(_gTex, _meanG, gx, gy);
         BoxFilter(_pTex, _meanP, gx, gy);
         BoxFilter(_g2Tex, _meanG2, gx, gy);
         BoxFilter(_gpTex, _meanGP, gx, gy);
+        BoxFilter(_mTex, _meanM, gx, gy);
 
         // 3) Coefficients a,b
         guidedCompute.SetTexture(_kCoeff, "_MeanG", _meanG);
         guidedCompute.SetTexture(_kCoeff, "_MeanP", _meanP);
         guidedCompute.SetTexture(_kCoeff, "_MeanG2", _meanG2);
         guidedCompute.SetTexture(_kCoeff, "_MeanGP", _meanGP);
+        guidedCompute.SetTexture(_kCoeff, "_MeanM", _meanM);
         guidedCompute.SetTexture(_kCoeff, "_GTex", _gTex);
         guidedCompute.SetTexture(_kCoeff, "_ATex", _aTex);
         guidedCompute.SetTexture(_kCoeff, "_BTex", _bTex);
+        guidedCompute.SetFloat("_EpsCount", 1e-6f);
+        guidedCompute.SetInt("_MinValidCount", 1);
         guidedCompute.Dispatch(_kCoeff, gx, gy, 1);
 
         // 4) Box means for a,b
@@ -239,6 +246,9 @@ public class GuidedRefiner : DepthRefiner
         guidedCompute.SetTexture(_kCompose, "_MeanA", _meanA);
         guidedCompute.SetTexture(_kCompose, "_MeanB", _meanB);
         guidedCompute.SetTexture(_kCompose, "_GTex", _gTex);
+        guidedCompute.SetTexture(_kCompose, "_MeanM", _meanM);
+        guidedCompute.SetFloat("_EpsCount", 1e-6f);
+        guidedCompute.SetInt("_MinValidCount", 1);
         guidedCompute.SetTexture(_kCompose, "_Output", output);
         guidedCompute.Dispatch(_kCompose, gx, gy, 1);
 
@@ -286,11 +296,13 @@ public class GuidedRefiner : DepthRefiner
         EnsureRT(ref _pTex,   w, h, RenderTextureFormat.RFloat, true, FilterMode.Point);
         EnsureRT(ref _g2Tex,  w, h, RenderTextureFormat.RFloat, true, FilterMode.Point);
         EnsureRT(ref _gpTex,  w, h, RenderTextureFormat.RFloat, true, FilterMode.Point);
+        EnsureRT(ref _mTex,   w, h, RenderTextureFormat.RFloat, true, FilterMode.Point);
 
         EnsureRT(ref _meanG,  w, h, RenderTextureFormat.RFloat, true, FilterMode.Point);
         EnsureRT(ref _meanP,  w, h, RenderTextureFormat.RFloat, true, FilterMode.Point);
         EnsureRT(ref _meanG2, w, h, RenderTextureFormat.RFloat, true, FilterMode.Point);
         EnsureRT(ref _meanGP, w, h, RenderTextureFormat.RFloat, true, FilterMode.Point);
+        EnsureRT(ref _meanM,  w, h, RenderTextureFormat.RFloat, true, FilterMode.Point);
 
         EnsureRT(ref _aTex,   w, h, RenderTextureFormat.RFloat, true, FilterMode.Point);
         EnsureRT(ref _bTex,   w, h, RenderTextureFormat.RFloat, true, FilterMode.Point);
