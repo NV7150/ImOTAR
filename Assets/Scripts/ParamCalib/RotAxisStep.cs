@@ -20,9 +20,21 @@ public sealed class RotAxisStep : CalibStep {
     [SerializeField] private float startDeg = 0f;
     [SerializeField] private float guideDist = 1.0f; // used for X/Y
     [SerializeField] private float orbitRadiusM = 0.2f; // used for Z
+    
+    [Header("Limit")]
+    [SerializeField] private float maxAngleDeg = 90f;
 
     [Header("Sampling")]
     [SerializeField] private float safety = 1.0f;
+
+    [Header("Timing")]
+    [SerializeField] private float startDelaySec = 0f;
+
+    [Header("Parameter")]
+    [SerializeField] private string paramId;
+
+    [Header("Visual")]
+    [SerializeField] private GameObject stepObject;
 
     [Header("Message")]
     [SerializeField] private string stepMessage = "Rotate device following the guide, press when uncomfortable";
@@ -31,13 +43,19 @@ public sealed class RotAxisStep : CalibStep {
 
     private bool _started;
     private float _angleDeg;
+    private float _delayRemain;
     private Vector3 _center; // only for Z
     private Vector3 _offset; // only for Z
+    private float _startAngleDeg;
+    private Vector3 _camPos0;
+    private Quaternion _camRot0;
+    private Vector3 _fwd0, _up0, _right0;
 
     public override void StartCalib(){
         if (pose == null) throw new NullReferenceException("RotAxisStep: pose not assigned");
         if (guide == null) throw new NullReferenceException("RotAxisStep: guide not assigned");
         if (splatMan == null) throw new NullReferenceException("RotAxisStep: splatMan not assigned");
+        if (maxAngleDeg <= 0f) throw new InvalidOperationException("RotAxisStep: maxAngleDeg must be > 0");
 
         if (cameraTr == null){
             var main = Camera.main;
@@ -45,18 +63,27 @@ public sealed class RotAxisStep : CalibStep {
             cameraTr = main.transform;
         }
 
+        _camPos0 = cameraTr.position;
+        _camRot0 = cameraTr.rotation;
+        _fwd0 = cameraTr.forward;
+        _up0 = cameraTr.up;
+        _right0 = cameraTr.right;
+
         _angleDeg = startDeg;
+        _delayRemain = Mathf.Max(0f, startDelaySec);
+        _startAngleDeg = _angleDeg;
 
         if (kind == AxisKind.Z){
-            _center = cameraTr.position + cameraTr.forward * guideDist;
-            _offset = cameraTr.right * orbitRadiusM;
+            _center = _camPos0 + _fwd0 * guideDist;
+            _offset = _right0 * orbitRadiusM;
             guide.position = _center + _offset;
         } else {
-            Vector3 dir = XYOrbitDir(cameraTr, kind, _angleDeg);
-            guide.position = cameraTr.position + dir * guideDist;
+            Vector3 dir = XYOrbitDirBasis(_fwd0, _right0, _up0, kind, _angleDeg);
+            guide.position = _camPos0 + dir * guideDist;
         }
-        guide.rotation = cameraTr.rotation;
+        guide.rotation = _camRot0;
         if (!guide.gameObject.activeSelf) guide.gameObject.SetActive(true);
+        if (stepObject != null && !stepObject.activeSelf) stepObject.SetActive(true);
 
         _started = true;
     }
@@ -64,17 +91,37 @@ public sealed class RotAxisStep : CalibStep {
     private void Update(){
         if (!_started) return;
         float dt = Time.deltaTime;
+
+        if (_delayRemain > 0f){
+            _delayRemain -= dt;
+            if (_delayRemain > 0f){
+                // Keep guide at initial position
+                if (kind == AxisKind.Z){
+                    guide.position = _center + _offset;
+                } else {
+                    Vector3 dirHold = XYOrbitDirBasis(_fwd0, _right0, _up0, kind, _angleDeg);
+                    guide.position = _camPos0 + dirHold * guideDist;
+                }
+                guide.rotation = _camRot0;
+                return;
+            }
+        }
+
         float sgn = reverse ? -1f : 1f;
         _angleDeg += sgn * angVelDegPerSec * dt;
+        float halfRange = Mathf.Abs(maxAngleDeg);
+        float minA = _startAngleDeg - halfRange;
+        float maxA = _startAngleDeg + halfRange;
+        _angleDeg = Mathf.Clamp(_angleDeg, minA, maxA);
 
         if (kind == AxisKind.Z){
-            Quaternion q = Quaternion.AngleAxis(_angleDeg, cameraTr.forward);
+            Quaternion q = Quaternion.AngleAxis(_angleDeg, _fwd0);
             guide.position = _center + q * _offset;
         } else {
-            Vector3 dir = XYOrbitDir(cameraTr, kind, _angleDeg);
-            guide.position = cameraTr.position + dir * guideDist;
+            Vector3 dir = XYOrbitDirBasis(_fwd0, _right0, _up0, kind, _angleDeg);
+            guide.position = _camPos0 + dir * guideDist;
         }
-        guide.rotation = cameraTr.rotation;
+        guide.rotation = _camRot0;
     }
 
     public override void RecordAndEnd(ICalibSuite recorder){
@@ -99,19 +146,14 @@ public sealed class RotAxisStep : CalibStep {
             default: throw new ArgumentOutOfRangeException();
         }
 
-        // Register corresponding parameter
-        if (kind == AxisKind.X){
-            if (reverse) recorder.RegisterParameter(new CounterPitchParam { Value = mag, Safety = Mathf.Abs(safety) });
-            else         recorder.RegisterParameter(new PitchParam         { Value = mag, Safety = Mathf.Abs(safety) });
-        } else if (kind == AxisKind.Y){
-            if (reverse) recorder.RegisterParameter(new CounterYawParam   { Value = mag, Safety = Mathf.Abs(safety) });
-            else         recorder.RegisterParameter(new YawParam           { Value = mag, Safety = Mathf.Abs(safety) });
-        } else { // Z
-            if (reverse) recorder.RegisterParameter(new CounterRollParam  { Value = mag, Safety = Mathf.Abs(safety) });
-            else         recorder.RegisterParameter(new RollParam          { Value = mag, Safety = Mathf.Abs(safety) });
-        }
+        if (string.IsNullOrEmpty(paramId))
+            throw new InvalidOperationException("RotAxisStep: paramId not set");
+
+        var absSafety = Mathf.Abs(safety);
+        recorder.RegisterParameter(paramId, new AngleParam { Id = paramId, Value = mag, Safety = absSafety });
 
         if (guide.gameObject.activeSelf) guide.gameObject.SetActive(false);
+        if (stepObject != null && stepObject.activeSelf) stepObject.SetActive(false);
         _started = false;
     }
 
@@ -126,6 +168,17 @@ public sealed class RotAxisStep : CalibStep {
         } else if (k == AxisKind.Y){
             Quaternion q = Quaternion.AngleAxis(angleDeg, cam.up);
             return q * cam.forward;
+        }
+        throw new ArgumentOutOfRangeException();
+    }
+
+    private static Vector3 XYOrbitDirBasis(Vector3 fwd, Vector3 right, Vector3 up, AxisKind k, float angleDeg){
+        if (k == AxisKind.X){
+            Quaternion q = Quaternion.AngleAxis(-angleDeg, right);
+            return q * fwd;
+        } else if (k == AxisKind.Y){
+            Quaternion q = Quaternion.AngleAxis(angleDeg, up);
+            return q * fwd;
         }
         throw new ArgumentOutOfRangeException();
     }

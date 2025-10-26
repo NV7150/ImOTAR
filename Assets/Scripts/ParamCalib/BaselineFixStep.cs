@@ -6,11 +6,7 @@ public sealed class BaselineFixStep : CalibStep {
     [Header("Guide / Camera")]
     [SerializeField] private PoseDiffManager pose;
     [SerializeField] private Transform cameraTr;
-    [SerializeField] private Transform guide;
-
-    [Header("Guide Placement (meters)")]
-    [SerializeField] private float guideDist = 1.0f;
-    [SerializeField] private Vector2 guideOffset = Vector2.zero; // right/up
+    [SerializeField] private GameObject guide;
 
     [Header("Message")]
     [SerializeField] private string stepMessage = "Stabilize target and press to set baseline";
@@ -28,13 +24,7 @@ public sealed class BaselineFixStep : CalibStep {
             cameraTr = main.transform;
         }
 
-        Vector3 pos = cameraTr.position
-                     + cameraTr.forward * guideDist
-                     + cameraTr.right   * guideOffset.x
-                     + cameraTr.up      * guideOffset.y;
-        guide.position = pos;
-        guide.rotation = cameraTr.rotation;
-        if (!guide.gameObject.activeSelf) guide.gameObject.SetActive(true);
+        guide.SetActive(false);
 
         _started = true;
     }

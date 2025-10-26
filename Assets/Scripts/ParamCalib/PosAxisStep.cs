@@ -22,6 +22,15 @@ public sealed class PosAxisStep : CalibStep {
     [Header("Sampling")]
     [SerializeField] private float safety = 1.0f;
 
+    [Header("Timing")]
+    [SerializeField] private float startDelaySec = 0f;
+
+    [Header("Parameter")]
+    [SerializeField] private string paramId;
+
+    [Header("Visual")]
+    [SerializeField] private GameObject stepObject;
+
     [Header("Message")]
     [SerializeField] private string stepMessage = "Move body along axis following the guide, press when uncomfortable";
 
@@ -29,6 +38,7 @@ public sealed class PosAxisStep : CalibStep {
 
     private bool _started;
     private float _offset;
+    private float _delayRemain;
 
     public override void StartCalib(){
         if (pose == null) throw new NullReferenceException("PosAxisStep: pose not assigned");
@@ -41,10 +51,12 @@ public sealed class PosAxisStep : CalibStep {
         }
 
         _offset = 0f;
+        _delayRemain = Mathf.Max(0f, startDelaySec);
         Vector3 pos = cameraTr.position + cameraTr.forward * guideDist;
         guide.position = pos;
         guide.rotation = cameraTr.rotation;
         if (!guide.gameObject.activeSelf) guide.gameObject.SetActive(true);
+        if (stepObject != null && !stepObject.activeSelf) stepObject.SetActive(true);
 
         _started = true;
     }
@@ -52,10 +64,21 @@ public sealed class PosAxisStep : CalibStep {
     private void Update(){
         if (!_started) return;
         float dt = Time.deltaTime;
+
+        Vector3 pos = cameraTr.position + cameraTr.forward * guideDist;
+
+        if (_delayRemain > 0f){
+            _delayRemain -= dt;
+            if (_delayRemain > 0f){
+                guide.position = pos;
+                guide.rotation = cameraTr.rotation;
+                return;
+            }
+        }
+
         float dir = reverse ? -1f : 1f;
         _offset += speedMps * dir * dt;
 
-        Vector3 pos = cameraTr.position + cameraTr.forward * guideDist;
         if (kind == AxisKind.X) pos += cameraTr.right * _offset;
         else if (kind == AxisKind.Y) pos += cameraTr.up * _offset;
         else pos += cameraTr.forward * _offset; // Z
@@ -75,18 +98,14 @@ public sealed class PosAxisStep : CalibStep {
         else if (kind == AxisKind.Y) mag = Mathf.Abs(t.y) * Mathf.Abs(safety);
         else mag = Mathf.Abs(t.z) * Mathf.Abs(safety);
 
-        if (kind == AxisKind.X){
-            if (reverse) recorder.RegisterParameter(new LeftParam   { Value = mag, Safety = Mathf.Abs(safety) });
-            else         recorder.RegisterParameter(new RightParam  { Value = mag, Safety = Mathf.Abs(safety) });
-        } else if (kind == AxisKind.Y){
-            if (reverse) recorder.RegisterParameter(new DownParam   { Value = mag, Safety = Mathf.Abs(safety) });
-            else         recorder.RegisterParameter(new UpParam     { Value = mag, Safety = Mathf.Abs(safety) });
-        } else {
-            if (reverse) recorder.RegisterParameter(new BackParam   { Value = mag, Safety = Mathf.Abs(safety) });
-            else         recorder.RegisterParameter(new ForwardParam{ Value = mag, Safety = Mathf.Abs(safety) });
-        }
+        if (string.IsNullOrEmpty(paramId))
+            throw new InvalidOperationException("PosAxisStep: paramId not set");
+
+        var absSafety = Mathf.Abs(safety);
+        recorder.RegisterParameter(paramId, new DistanceParam { Id = paramId, Value = mag, Safety = absSafety });
 
         if (guide.gameObject.activeSelf) guide.gameObject.SetActive(false);
+        if (stepObject != null && stepObject.activeSelf) stepObject.SetActive(false);
         _started = false;
     }
 }
