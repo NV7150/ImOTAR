@@ -10,5 +10,6 @@ public class StartExp : MonoBehaviour {
     public void StartProcess(){
         disableObjs.ForEach(o => o.SetActive(false));
         enableObjs.ForEach(o => o.SetActive(true));
+        calibMan.StartCalibration();
     }
 }

@@ -36,6 +36,11 @@ public sealed class RotAxisStep : CalibStep {
     [Header("Visual")]
     [SerializeField] private GameObject stepObject;
 
+    [Header("Visual Feedback")]
+    [SerializeField] private Color resetColor = Color.white;
+    [SerializeField] private Color maxColor = Color.red;
+    [SerializeField] private Material guideMaterial;
+
     [Header("Message")]
     [SerializeField] private string stepMessage = "Rotate device following the guide, press when uncomfortable";
 
@@ -45,11 +50,12 @@ public sealed class RotAxisStep : CalibStep {
     private float _angleDeg;
     private float _delayRemain;
     private Vector3 _center; // only for Z
-    private Vector3 _offset; // only for Z
     private float _startAngleDeg;
     private Vector3 _camPos0;
     private Quaternion _camRot0;
     private Vector3 _fwd0, _up0, _right0;
+    private bool _atMax;
+    private Material _material;
 
     public override void StartCalib(){
         if (pose == null) throw new NullReferenceException("RotAxisStep: pose not assigned");
@@ -75,13 +81,17 @@ public sealed class RotAxisStep : CalibStep {
 
         if (kind == AxisKind.Z){
             _center = _camPos0 + _fwd0 * guideDist;
-            _offset = _right0 * orbitRadiusM;
-            guide.position = _center + _offset;
+            guide.position = _center; // spin in place for Z
         } else {
             Vector3 dir = XYOrbitDirBasis(_fwd0, _right0, _up0, kind, _angleDeg);
             guide.position = _camPos0 + dir * guideDist;
         }
         guide.rotation = _camRot0;
+        if (guideMaterial == null) throw new NullReferenceException("RotAxisStep: guideMaterial not assigned");
+        _material = guideMaterial;
+        if (!_material.HasProperty("_BaseColor")) throw new InvalidOperationException("RotAxisStep: material must have _BaseColor");
+        _atMax = false;
+        SetGuideColor(resetColor);
         if (!guide.gameObject.activeSelf) guide.gameObject.SetActive(true);
         if (stepObject != null && !stepObject.activeSelf) stepObject.SetActive(true);
 
@@ -97,7 +107,7 @@ public sealed class RotAxisStep : CalibStep {
             if (_delayRemain > 0f){
                 // Keep guide at initial position
                 if (kind == AxisKind.Z){
-                    guide.position = _center + _offset;
+                    guide.position = _center; // hold at center during delay
                 } else {
                     Vector3 dirHold = XYOrbitDirBasis(_fwd0, _right0, _up0, kind, _angleDeg);
                     guide.position = _camPos0 + dirHold * guideDist;
@@ -112,16 +122,23 @@ public sealed class RotAxisStep : CalibStep {
         float halfRange = Mathf.Abs(maxAngleDeg);
         float minA = _startAngleDeg - halfRange;
         float maxA = _startAngleDeg + halfRange;
+        float beforeClamp = _angleDeg;
         _angleDeg = Mathf.Clamp(_angleDeg, minA, maxA);
+        bool hitMax = !Mathf.Approximately(beforeClamp, _angleDeg) || Mathf.Approximately(_angleDeg, minA) || Mathf.Approximately(_angleDeg, maxA);
 
         if (kind == AxisKind.Z){
-            Quaternion q = Quaternion.AngleAxis(_angleDeg, _fwd0);
-            guide.position = _center + q * _offset;
+            Quaternion q = Quaternion.AngleAxis(-_angleDeg, _fwd0);
+            guide.position = _center; // no orbit for Z
+            guide.rotation = q * _camRot0; // spin (roll) in place
         } else {
             Vector3 dir = XYOrbitDirBasis(_fwd0, _right0, _up0, kind, _angleDeg);
             guide.position = _camPos0 + dir * guideDist;
+            guide.rotation = _camRot0;
         }
-        guide.rotation = _camRot0;
+        if (hitMax != _atMax){
+            SetGuideColor(hitMax ? maxColor : resetColor);
+            _atMax = hitMax;
+        }
     }
 
     public override void RecordAndEnd(ICalibSuite recorder){
@@ -181,6 +198,10 @@ public sealed class RotAxisStep : CalibStep {
             return q * fwd;
         }
         throw new ArgumentOutOfRangeException();
+    }
+
+    private void SetGuideColor(Color color){
+        _material.SetColor("_BaseColor", color);
     }
 }
 

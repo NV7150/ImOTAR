@@ -7,13 +7,21 @@ public class CalibrationSphere : MonoBehaviour {
 
     [SerializeField] private float minSize = 0.3f;
 
+    [SerializeField] private Vector3 scaleAxis = new Vector3(1f, 10f, 1f);
+
     void Start(){
-        sphere.transform.localScale = ((maxSize - minSize) * 0.5f + minSize)* new Vector3(1, 10, 1);
+        sphere.transform.localScale = ((maxSize - minSize) * 0.5f + minSize) * scaleAxis;
         sphere.transform.position = player.transform.position;
     }
 
     public void Adjust(float rate){
-        sphere.transform.localScale = ((maxSize - minSize) * rate + minSize) * new Vector3(1, 10, 1);
-        Debug.Log(sphere.transform.localScale);
+        // Scale is diameter, so multiply 2 to make it radius
+        sphere.transform.localScale = ((maxSize - minSize) * rate + minSize) * 2 * scaleAxis;
+    }
+
+    public void SetMeter(float meter){
+        // Force set by meter; ignores min/max range.
+        // Scale is diameter, so multiply 2 to make it radius
+        sphere.transform.localScale = meter * 2 * scaleAxis;
     }
 }
