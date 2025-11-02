@@ -17,7 +17,7 @@ namespace dang0.ServerLog{
     }
 
     [DisallowMultipleComponent]
-    public sealed class PerformanceMonitor : MonoBehaviour {
+    public sealed class PerformanceMonitor : ExpLogger {
         private const string DATE_FORMAT = "yyyy-MM-dd_HH:mm:ss";
         private const string FILE_NAME_FORMAT = "performance_{0}.json";
 
@@ -31,53 +31,72 @@ namespace dang0.ServerLog{
         [SerializeField] private bool enableMonoUsedSize = true;
         [SerializeField] private bool enableBatteryLevel = true;
         [SerializeField] private bool enableBatteryStatus = true;
-        [SerializeField] private string subjectId;
+        [SerializeField] private ExperimentPhaseManager phaseManager;
         [SerializeField] private Sender sender;
 
         private MonitorStatus status = MonitorStatus.UNSTARTED;
-        private List<MetricData> recordedData = new List<MetricData>();
+        private Dictionary<ExperimentPhase, List<MetricData>> recordedDataByPhase = new Dictionary<ExperimentPhase, List<MetricData>>();
         private Coroutine recordingCoroutine;
+        private string subjectId;
+        private string experimentId;
 
-        public string ExperimentId { get; set; }
         public MonitorStatus Status => status;
 
-        public void StartMonitor(){
+        public override void StartLogging(string subjectId, string experimentId){
             if (status == MonitorStatus.RECORDING) throw new InvalidOperationException("Monitor is already recording");
-            if (string.IsNullOrEmpty(subjectId)) throw new InvalidOperationException("subjectId is not set");
-            if (string.IsNullOrEmpty(ExperimentId)) throw new InvalidOperationException("ExperimentId is not set");
-            if (sender == null) throw new NullReferenceException("Sender is not assigned");
+            if (string.IsNullOrEmpty(subjectId)) throw new ArgumentException("subjectId is null or empty", nameof(subjectId));
+            if (string.IsNullOrEmpty(experimentId)) throw new ArgumentException("experimentId is null or empty", nameof(experimentId));
+            if (phaseManager == null) throw new NullReferenceException("PerformanceMonitor: phaseManager not assigned");
+            if (sender == null) throw new NullReferenceException("PerformanceMonitor: sender not assigned");
 
+            this.subjectId = subjectId;
+            this.experimentId = experimentId;
             status = MonitorStatus.RECORDING;
-            recordedData.Clear();
+            recordedDataByPhase.Clear();
             recordingCoroutine = StartCoroutine(RecordMetrics());
         }
 
-        public void EndMonitor(){
-            if (status != MonitorStatus.RECORDING) throw new InvalidOperationException("Monitor is not recording");
+        public override void SendPhase(ExperimentPhase phase){
+            if (sender == null) throw new NullReferenceException("PerformanceMonitor: sender not assigned");
+            if (string.IsNullOrEmpty(subjectId)) throw new InvalidOperationException("PerformanceMonitor: StartLogging has not been called");
 
-            if (recordingCoroutine != null){
-                StopCoroutine(recordingCoroutine);
-                recordingCoroutine = null;
+            if (!recordedDataByPhase.ContainsKey(phase) || recordedDataByPhase[phase].Count == 0){
+                return;
             }
 
-            status = MonitorStatus.RECORD_END;
-
             try {
-                var jsonArray = ConvertToJsonArray(recordedData);
+                var jsonArray = ConvertToJsonArray(recordedDataByPhase[phase]);
                 var timestamp = DateTime.Now.ToString(DATE_FORMAT);
-                var fileName = string.Format(FILE_NAME_FORMAT, timestamp);
+                var fileName = string.Format(FILE_NAME_FORMAT, timestamp + "_" + phase.ToString());
                 var filePath = Path.Combine(Application.persistentDataPath, fileName);
                 
                 File.WriteAllText(filePath, jsonArray, Encoding.UTF8);
                 Debug.Log($"Performance data saved to: {filePath}");
 
-                var payload = new Payload(DateTime.Now, subjectId, ExperimentId, jsonArray);
+                var phasedPayload = new PhasedPayload(phase, jsonArray);
+                var payload = new Payload(DateTime.Now, subjectId, experimentId, phasedPayload.ToJson());
                 sender.Send(payload);
                 status = MonitorStatus.DATA_SENT;
             } catch (Exception ex){
                 Debug.LogError($"Failed to save or send performance data: {ex.Message}");
                 status = MonitorStatus.DATA_SENT_FAILED;
                 throw;
+            }
+        }
+
+        public override void SendAllPhases(){
+            if (string.IsNullOrEmpty(subjectId)) throw new InvalidOperationException("PerformanceMonitor: StartLogging has not been called");
+
+            if (status == MonitorStatus.RECORDING){
+                if (recordingCoroutine != null){
+                    StopCoroutine(recordingCoroutine);
+                    recordingCoroutine = null;
+                }
+                status = MonitorStatus.RECORD_END;
+            }
+
+            foreach (var phase in recordedDataByPhase.Keys){
+                SendPhase(phase);
             }
         }
 
@@ -121,7 +140,11 @@ namespace dang0.ServerLog{
                 data.SetBatteryStatus(batteryStatus != BatteryStatus.Unknown ? batteryStatus.ToString() : null);
             }
 
-            recordedData.Add(data);
+            var currentPhase = phaseManager.CurrPhase;
+            if (!recordedDataByPhase.ContainsKey(currentPhase)){
+                recordedDataByPhase[currentPhase] = new List<MetricData>();
+            }
+            recordedDataByPhase[currentPhase].Add(data);
         }
 
         private string ConvertToJsonArray(List<MetricData> dataList){
