@@ -31,6 +31,12 @@ public sealed class NaiveEstimateManager : AsyncFrameProvider {
         TryStartNewJob();
     }
 
+    private void OnDisable(){
+        if (processor != null){
+            processor.TeardownInputSubscriptions();
+        }
+    }
+
     private void TryStartNewJob(){
         if (processor == null || !processor.IsInitialized) return;
         if (processor.IsRunning) return;

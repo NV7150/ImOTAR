@@ -20,6 +20,10 @@ public class ARCameraIntrinsicProvider : IntrinsicProviderBase {
         StartCoroutine(WaitForIntrinsics());
     }
 
+    private void OnDisable(){
+        StopAllCoroutines();
+    }
+
     private System.Collections.IEnumerator WaitForIntrinsics(){
         while (!_hasIntrinsics){
             TryInitIntrinsics();

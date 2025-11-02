@@ -64,6 +64,7 @@ public class PcdCorrector : FrameProvider {
 
     protected virtual void OnDisable(){
         if (structureManager != null) structureManager.OnReady -= OnSplatReady;
+        StopAllCoroutines();
     }
 
     private System.Collections.IEnumerator WaitForIntrinsics(){

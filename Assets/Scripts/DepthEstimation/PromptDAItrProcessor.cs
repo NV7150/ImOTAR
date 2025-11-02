@@ -351,6 +351,15 @@ public class PromptDAItrProcessor : DepthModelIterableProcessor {
         }
     }
 
+    public override void TeardownInputSubscriptions(){
+        if (cameraRec != null) {
+            cameraRec.OnFrameUpdated -= OnRgbFrameReceived;
+        }
+        if (depthRec != null) {
+            depthRec.OnFrameUpdated -= OnDepthFrameReceived;
+        }
+    }
+
     private void OnRgbFrameReceived(RenderTexture rgb){
         _latestRgb = new FrameData{
             timestamp = cameraRec != null ? cameraRec.TimeStamp : DateTime.MinValue,

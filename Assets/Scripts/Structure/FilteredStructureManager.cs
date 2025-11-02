@@ -82,6 +82,7 @@ public class FilteredStructureManager : StructureManager {
             _currentSplat.Dispose();
             _currentSplat = null;
         }
+        StopAllCoroutines();
     }
 
     private System.Collections.IEnumerator WaitForIntrinsics(){

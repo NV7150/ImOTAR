@@ -14,6 +14,7 @@ public abstract class DepthModelIterableProcessor : MonoBehaviour {
 
     // Starter
     public abstract void SetupInputSubscriptions();
+    public abstract void TeardownInputSubscriptions();
 
     // Returns Guid.Empty if start was not permitted
     public abstract Guid TryStartProcessing();

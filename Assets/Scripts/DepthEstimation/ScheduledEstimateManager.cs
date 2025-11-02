@@ -45,7 +45,9 @@ public class ScheduledEstimateManager : AsyncFrameProvider {
     }
 
     private void OnDisable(){
-        // Processor owns input subscriptions now
+        if (processor != null){
+            processor.TeardownInputSubscriptions();
+        }
     }
 
     private void Update(){

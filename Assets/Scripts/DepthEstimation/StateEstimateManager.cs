@@ -36,6 +36,9 @@ public class StateEstimateManager : AsyncFrameProvider {
     }
 
     private void OnDisable(){
+        if (processor != null){
+            processor.TeardownInputSubscriptions();
+        }
         state.TryGenerate -= TryBirth;
         state.OnGenerate -= OnBirth;
         state.OnDiscard  -= OnDead;

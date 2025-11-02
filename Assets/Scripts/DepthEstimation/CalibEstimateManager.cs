@@ -28,6 +28,12 @@ public sealed class CalibEstimateManager : AsyncFrameProvider {
         }
     }
 
+    private void OnDisable(){
+        if (processor != null){
+            processor.TeardownInputSubscriptions();
+        }
+    }
+
     public void Resume(){ _run = true; TryStartIfIdle(); }
     public void Pause(){ _run = false; CancelCurrentIfAny(); }
 
