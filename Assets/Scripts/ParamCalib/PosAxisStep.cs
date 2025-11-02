@@ -43,6 +43,7 @@ public sealed class PosAxisStep : CalibStep {
     [SerializeField] private string stepMessage = "Move body along axis following the guide, press when uncomfortable";
 
     public override string StepMessage => stepMessage;
+    public override string Id => paramId;
 
     private bool _started;
     private float _offset;

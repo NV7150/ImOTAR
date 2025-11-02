@@ -45,6 +45,7 @@ public sealed class RotAxisStep : CalibStep {
     [SerializeField] private string stepMessage = "Rotate device following the guide, press when uncomfortable";
 
     public override string StepMessage => stepMessage;
+    public override string Id => paramId;
 
     private bool _started;
     private float _angleDeg;

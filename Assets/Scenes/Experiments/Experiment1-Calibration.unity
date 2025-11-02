@@ -453,7 +453,7 @@ MonoBehaviour:
   resetColor: {r: 1, g: 0, b: 0, a: 0.49019608}
   maxColor: {r: 0, g: 1, b: 0, a: 0.49019608}
   guideMaterial: {fileID: 2100000, guid: eec216e51b806476f8f94a4dbe7d23d8, type: 2}
-  stepMessage: "\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u53F3\u306B\u30C7\u30D0\u30A4\u30B9\u3092\u30B9\u30E9\u30A4\u30C9\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+  stepMessage: "\u4E26\u9032\uFF1A\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u53F3\u306B\u30C7\u30D0\u30A4\u30B9\u3092\u30B9\u30E9\u30A4\u30C9\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
 --- !u!4 &67322615
 Transform:
   m_ObjectHideFlags: 0
@@ -666,11 +666,11 @@ MonoBehaviour:
   intrinsicProvider: {fileID: 2135528722}
   filterCreator: {fileID: 7200000, guid: 81096c906f77342e5957cc4e9e912e6f, type: 3}
   rScale: 1.5
-  rMin: 0.0005
+  rMin: 0.00005
   rMax: 0.05
   enableFilter: 0
-  neighborWin: 5
-  minNeighbor: 3
+  neighborWin: 3
+  minNeighbor: 2
   depthBandAbs: 0.003
   depthBandRel: 0.03
   zPosEps: 0.000001
@@ -910,7 +910,7 @@ MonoBehaviour:
   resetColor: {r: 1, g: 0, b: 0, a: 0.49019608}
   maxColor: {r: 0, g: 1, b: 0, a: 0.49019608}
   guideMaterial: {fileID: 2100000, guid: eec216e51b806476f8f94a4dbe7d23d8, type: 2}
-  stepMessage: "\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u53F3\u56DE\u308A\u306B\u30C7\u30D0\u30A4\u30B9\u3092\u56DE\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+  stepMessage: "\u56DE\u8EE2\uFF1A\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u53F3\u56DE\u308A\u306B\u30C7\u30D0\u30A4\u30B9\u3092\u56DE\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
 --- !u!4 &172518761
 Transform:
   m_ObjectHideFlags: 0
@@ -1448,7 +1448,7 @@ MonoBehaviour:
   resetColor: {r: 1, g: 0, b: 0, a: 0.49019608}
   maxColor: {r: 0, g: 1, b: 0, a: 0.49019608}
   guideMaterial: {fileID: 2100000, guid: eec216e51b806476f8f94a4dbe7d23d8, type: 2}
-  stepMessage: "\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u4E0B\u306B\u8996\u70B9\u3092\u4E0B\u3052\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+  stepMessage: "\u56DE\u8EE2\uFF1A\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u4E0B\u306B\u8996\u70B9\u3092\u4E0B\u3052\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
 --- !u!4 &325450097
 Transform:
   m_ObjectHideFlags: 0
@@ -1583,7 +1583,7 @@ MonoBehaviour:
   resetColor: {r: 1, g: 0, b: 0, a: 0.49019608}
   maxColor: {r: 0, g: 1, b: 0, a: 0.49019608}
   guideMaterial: {fileID: 2100000, guid: eec216e51b806476f8f94a4dbe7d23d8, type: 2}
-  stepMessage: "\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u5DE6\u56DE\u308A\u306B\u30C7\u30D0\u30A4\u30B9\u3092\u56DE\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+  stepMessage: "\u56DE\u8EE2\uFF1A\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u5DE6\u56DE\u308A\u306B\u30C7\u30D0\u30A4\u30B9\u3092\u56DE\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
 --- !u!4 &339907058
 Transform:
   m_ObjectHideFlags: 0
@@ -1956,6 +1956,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sender: {fileID: 418158140}
   subjectid: ImOTARCalib
+  manager: {fileID: 1418116782}
 --- !u!114 &418158140
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3308,7 +3309,7 @@ MonoBehaviour:
   resetColor: {r: 1, g: 0, b: 0, a: 0.49019608}
   maxColor: {r: 0, g: 1, b: 0, a: 0.49019608}
   guideMaterial: {fileID: 2100000, guid: eec216e51b806476f8f94a4dbe7d23d8, type: 2}
-  stepMessage: "\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u5DE6\u306B\u8996\u70B9\u3092\u56DE\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+  stepMessage: "\u56DE\u8EE2\uFF1A\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u5DE6\u306B\u8996\u70B9\u3092\u56DE\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
 --- !u!4 &790574688
 Transform:
   m_ObjectHideFlags: 0
@@ -3371,7 +3372,7 @@ MonoBehaviour:
   resetColor: {r: 1, g: 0, b: 0, a: 0.49019608}
   maxColor: {r: 0, g: 1, b: 0, a: 0.49019608}
   guideMaterial: {fileID: 2100000, guid: eec216e51b806476f8f94a4dbe7d23d8, type: 2}
-  stepMessage: "\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u4E0A\u306B\u8996\u70B9\u3092\u4E0A\u3052\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+  stepMessage: "\u56DE\u8EE2\uFF1A\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u4E0A\u306B\u8996\u70B9\u3092\u4E0A\u3052\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
 --- !u!4 &802352967
 Transform:
   m_ObjectHideFlags: 0
@@ -3504,7 +3505,7 @@ MonoBehaviour:
   resetColor: {r: 1, g: 0, b: 0, a: 0.49019608}
   maxColor: {r: 0, g: 1, b: 0, a: 0.49019608}
   guideMaterial: {fileID: 2100000, guid: eec216e51b806476f8f94a4dbe7d23d8, type: 2}
-  stepMessage: "\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u4E0A\u306B\u30C7\u30D0\u30A4\u30B9\u3092\u30B9\u30E9\u30A4\u30C9\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+  stepMessage: "\u4E26\u9032\uFF1A\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u4E0A\u306B\u30C7\u30D0\u30A4\u30B9\u3092\u30B9\u30E9\u30A4\u30C9\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
 --- !u!4 &810341006
 Transform:
   m_ObjectHideFlags: 0
@@ -3838,7 +3839,7 @@ MonoBehaviour:
   resetColor: {r: 1, g: 0, b: 0, a: 0.49019608}
   maxColor: {r: 0, g: 1, b: 0, a: 0.49019608}
   guideMaterial: {fileID: 2100000, guid: eec216e51b806476f8f94a4dbe7d23d8, type: 2}
-  stepMessage: "\u8D64\u3044\u30D5\u30EC\u30FC\u30E0\u306E\u5927\u304D\u3055\u3092\u306A\u308B\u3079\u304F\u7DAD\u6301\u3059\u308B\u3088\u3046\u306B\u524D\u306B\u7A81\u304D\u51FA\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+  stepMessage: "\u4E26\u9032\uFF1A\u8D64\u3044\u30D5\u30EC\u30FC\u30E0\u306E\u5927\u304D\u3055\u3092\u306A\u308B\u3079\u304F\u7DAD\u6301\u3059\u308B\u3088\u3046\u306B\u524D\u306B\u7A81\u304D\u51FA\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
 --- !u!4 &909199179
 Transform:
   m_ObjectHideFlags: 0
@@ -3916,7 +3917,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 04b1b468dce5b4496a02f22c87fff791, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  calibMan: {fileID: 1418116782}
+  startProcess:
+    m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 1418116782}
+        m_TargetAssemblyTypeName: CalibManager, Assembly-CSharp
+        m_MethodName: StartCalibration
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
   disableObjs:
   - {fileID: 1680651399}
   - {fileID: 1003148038}
@@ -4014,6 +4029,116 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 946385013}
   m_CullTransparentMesh: 1
+--- !u!1 &959678870
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 959678874}
+  - component: {fileID: 959678873}
+  - component: {fileID: 959678872}
+  - component: {fileID: 959678871}
+  m_Layer: 0
+  m_Name: Cylinder
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!136 &959678871
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 959678870}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 0
+  serializedVersion: 2
+  m_Radius: 0.5000001
+  m_Height: 2
+  m_Direction: 1
+  m_Center: {x: 0.000000059604645, y: 0, z: -0.00000008940697}
+--- !u!23 &959678872
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 959678870}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: d8999bc4e40ea4c99acb7ede3395f15a, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!33 &959678873
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 959678870}
+  m_Mesh: {fileID: 10206, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!4 &959678874
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 959678870}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &996310576
 GameObject:
   m_ObjectHideFlags: 0
@@ -5088,7 +5213,7 @@ MonoBehaviour:
   resetColor: {r: 1, g: 0, b: 0, a: 0.49019608}
   maxColor: {r: 0, g: 1, b: 0, a: 0.49019608}
   guideMaterial: {fileID: 2100000, guid: eec216e51b806476f8f94a4dbe7d23d8, type: 2}
-  stepMessage: "\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u4E0B\u306B\u30C7\u30D0\u30A4\u30B9\u3092\u30B9\u30E9\u30A4\u30C9\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+  stepMessage: "\u4E26\u9032\uFF1A\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u4E0B\u306B\u30C7\u30D0\u30A4\u30B9\u3092\u30B9\u30E9\u30A4\u30C9\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
 --- !u!4 &1250282416
 Transform:
   m_ObjectHideFlags: 0
@@ -5412,7 +5537,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1326220311}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -5485,7 +5610,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7d733d4198de44e6795a191fd2c16e4f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  sphere: {fileID: 1326220311}
+  sphere: {fileID: 959678870}
   player: {fileID: 1461364216}
   maxSize: 5
   minSize: 0.1
@@ -5916,7 +6041,7 @@ MonoBehaviour:
   resetColor: {r: 1, g: 0, b: 0, a: 0.49019608}
   maxColor: {r: 0, g: 1, b: 0, a: 0.49019608}
   guideMaterial: {fileID: 2100000, guid: eec216e51b806476f8f94a4dbe7d23d8, type: 2}
-  stepMessage: "\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u5DE6\u306B\u30C7\u30D0\u30A4\u30B9\u3092\u30B9\u30E9\u30A4\u30C9\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+  stepMessage: "\u4E26\u9032\uFF1A\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u5DE6\u306B\u30C7\u30D0\u30A4\u30B9\u3092\u30B9\u30E9\u30A4\u30C9\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
 --- !u!4 &1373532672
 Transform:
   m_ObjectHideFlags: 0
@@ -6052,6 +6177,7 @@ MonoBehaviour:
   - {fileID: 325450096}
   - {fileID: 172518760}
   - {fileID: 339907057}
+  randomize: 1
   resetStep: {fileID: 1346414866}
   estimator: {fileID: 730045953}
   autoRunBaseline: 1
@@ -6971,7 +7097,7 @@ MonoBehaviour:
   resetColor: {r: 1, g: 0, b: 0, a: 0.49019608}
   maxColor: {r: 0, g: 1, b: 0, a: 0.49019608}
   guideMaterial: {fileID: 2100000, guid: eec216e51b806476f8f94a4dbe7d23d8, type: 2}
-  stepMessage: "\u8D64\u3044\u30D5\u30EC\u30FC\u30E0\u306E\u5927\u304D\u3055\u3092\u306A\u308B\u3079\u304F\u7DAD\u6301\u3059\u308B\u3088\u3046\u306B\u5F8C\u308D\u306B\u4E0B\u304C\u3063\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+  stepMessage: "\u4E26\u9032\uFF1A\u8D64\u3044\u30D5\u30EC\u30FC\u30E0\u306E\u5927\u304D\u3055\u3092\u306A\u308B\u3079\u304F\u7DAD\u6301\u3059\u308B\u3088\u3046\u306B\u5F8C\u308D\u306B\u4E0B\u304C\u3063\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
 --- !u!4 &1623138658
 Transform:
   m_ObjectHideFlags: 0
@@ -7199,8 +7325,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   meters:
   - 1.5
-  - 3
-  - 5
+  - 3.25
+  - 4.25
   target: {fileID: 1326220316}
   buttonsRoot: {fileID: 1680651400}
   buttonPrefab: {fileID: 3647618911866702580, guid: 2ea3000319455432a936bc1f73dc1c5e, type: 3}
@@ -7313,7 +7439,7 @@ MonoBehaviour:
   resetColor: {r: 1, g: 0, b: 0, a: 0.49019608}
   maxColor: {r: 0, g: 1, b: 0, a: 0.49019608}
   guideMaterial: {fileID: 2100000, guid: eec216e51b806476f8f94a4dbe7d23d8, type: 2}
-  stepMessage: "\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u53F3\u306B\u8996\u70B9\u3092\u56DE\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+  stepMessage: "\u56DE\u8EE2\uFF1A\u8D64\u3044\u30AC\u30A4\u30C9\u306B\u5F93\u3063\u3066\u3086\u3063\u304F\u308A\u3068\u53F3\u306B\u8996\u70B9\u3092\u56DE\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u5883\u754C\u7DDA\u306B\u7DD1\u8272\u304C\u898B\u3048\u305F\u3089\u30DC\u30BF\u30F3\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
 --- !u!4 &1718961553
 Transform:
   m_ObjectHideFlags: 0
@@ -7448,9 +7574,9 @@ MonoBehaviour:
   sourceProvider: {fileID: 1969467336}
   cannyCompute: {fileID: 7200000, guid: e8968b472619746b2bbce1e049672f64, type: 3}
   lumaWeights: {x: 0.299, y: 0.587, z: 0.114}
-  lowThreshold: 0.05
+  lowThreshold: 0.1
   highThreshold: 0.3
-  hysteresisPasses: 2
+  hysteresisPasses: 4
   edgeTex: {fileID: 8400000, guid: ac9dca5ebce9e4913bfc0e359d0aafb3, type: 2}
 --- !u!1 &1769249482
 GameObject:
@@ -8104,7 +8230,7 @@ MonoBehaviour:
   structureManager: {fileID: 129897545}
   poseDiff: {fileID: 535656709}
   outputMeters: {fileID: 8400000, guid: 0c06b4f5c3e1c44979a73699b993d424, type: 2}
-  splatTransformMaterial: {fileID: 2100000, guid: 4ac46aa08e24344dc9007287b3ecb50a, type: 2}
+  splatTransformMaterial: {fileID: 2100000, guid: 0997fd7bd46a7481896e17540a30a6c6, type: 2}
   intrinsicProvider: {fileID: 2135528722}
   nearMeters: 0.03
   farMeters: 20
@@ -8311,7 +8437,7 @@ MonoBehaviour:
   depthProvider: {fileID: 1032467858}
   edgeProvider: {fileID: 1731761570}
   guidedCompute: {fileID: 7200000, guid: bd11de9719dcb4d84ab21aa8c8faf113, type: 3}
-  radius: 4
+  radius: 6
   epsilon: 0.0004
   edgeEpsScale: 4
   output: {fileID: 8400000, guid: 65ac76abb68e54d62b9a6daeffe41aeb, type: 2}
@@ -9288,3 +9414,4 @@ SceneRoots:
   - {fileID: 1471323947}
   - {fileID: 2138894540}
   - {fileID: 4938521451332679342}
+  - {fileID: 959678874}

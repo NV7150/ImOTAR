@@ -1,6 +1,6 @@
-using UnityEngine;
-using OpenCVForUnity.CoreModule;
+// using UnityEngine;
+// using OpenCVForUnity.CoreModule;
 
-public class OCSuperPix : MonoBehaviour {
+// public class OCSuperPix : MonoBehaviour {
     
-}
+// }

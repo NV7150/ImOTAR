@@ -14,6 +14,7 @@ public enum CalibPhase{
 public class CalibManager : MonoBehaviour {
     [Header("Steps")]
     [SerializeField] private List<CalibStep> steps = new List<CalibStep>();
+    [SerializeField] private bool randomize = false;
 
     [Header("Reset (Baseline)")]
     [SerializeField] private CalibStep resetStep; // baseline step instance (not included in steps)
@@ -34,6 +35,8 @@ public class CalibManager : MonoBehaviour {
     private bool _isResetActive;     // true when resetStep is active
     private CalibPhase _phase;       // external-visible state
     private InMemorySuite _suite;
+    private const int MinShuffleCount = 2;
+    private List<string> stepOrder;
 
     public int CurrentIndex => _idx;
     public CalibStep CurrentStep => _isResetActive ? resetStep : ((_idx >= 0 && _idx < steps.Count) ? steps[_idx] : null);
@@ -43,6 +46,8 @@ public class CalibManager : MonoBehaviour {
 
     // Total number of measurement steps.
     public int StepCount => steps?.Count ?? 0;
+
+    public IReadOnlyList<string> StepOrder => stepOrder;
 
     // 1-based current step number (reset shows upcoming measure number).
     public int StepNo {
@@ -78,6 +83,10 @@ public class CalibManager : MonoBehaviour {
     public void StartCalibration(){
         if (_phase == CalibPhase.END) 
             return;
+        if (_phase == CalibPhase.NOT_STARTED && randomize)
+            ShuffleSteps();
+        if (_phase == CalibPhase.NOT_STARTED)
+            BuildStepOrder();
         _phase = CalibPhase.CALIBRATING;
         StartActive();
     }
@@ -117,6 +126,36 @@ public class CalibManager : MonoBehaviour {
         } catch (Exception ex) {
             Debug.LogError($"{logPrefix} StartCalib failed: {ex.Message}\n{ex.StackTrace}");
             throw;
+        }
+    }
+
+    private void ShuffleSteps(){
+        if (steps == null)
+            throw new InvalidOperationException("CalibManager: steps is null");
+        if (steps.Count < MinShuffleCount)
+            return;
+        var rng = new System.Random();
+        for (int i = steps.Count - 1; i > 0; i--){
+            int j = rng.Next(i + 1);
+            var tmp = steps[i];
+            steps[i] = steps[j];
+            steps[j] = tmp;
+        }
+    }
+
+    private void BuildStepOrder(){
+        if (steps == null) throw new InvalidOperationException("CalibManager: steps is null");
+        if (steps.Count == 0) throw new InvalidOperationException("CalibManager: steps is empty");
+        var set = new HashSet<string>();
+        if (stepOrder == null) stepOrder = new List<string>(steps.Count);
+        else stepOrder.Clear();
+        for (int i = 0; i < steps.Count; i++){
+            var s = steps[i];
+            if (s == null) throw new InvalidOperationException("CalibManager: steps contains null");
+            var id = s.Id;
+            if (string.IsNullOrEmpty(id)) throw new InvalidOperationException("CalibManager: step Id is null or empty");
+            if (!set.Add(id)) throw new InvalidOperationException("CalibManager: duplicate step Id detected: " + id);
+            stepOrder.Add(id);
         }
     }
 

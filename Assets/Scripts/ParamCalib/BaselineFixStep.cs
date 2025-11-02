@@ -14,6 +14,8 @@ public sealed class BaselineFixStep : CalibStep {
 
     public override string StepMessage => stepMessage;
 
+    public override string Id => "Reset";
+
     private bool _started;
 
     public override void StartCalib(){
