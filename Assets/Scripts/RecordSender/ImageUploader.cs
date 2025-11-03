@@ -31,40 +31,46 @@ namespace ImOTAR.RecordSender
 		/// </summary>
 		public string ExpId { get; set; }
 
-		/// <summary>
-		/// Capture camera and each RenderTexture, then upload with the same exp_id.
-		/// </summary>
-		/// <param name="id">Suffix id to build exp_id as "{ExpId}-{id}".</param>
-		public async Task Take(string id)
+	/// <summary>
+	/// Capture camera and upload with exp_id.
+	/// </summary>
+	/// <param name="id">Suffix id to build exp_id as "{ExpId}-{id}".</param>
+	public async Task CameraTake(string id)
+	{
+		ValidateState(id);
+		var exp = string.Concat(ExpId, "-", id);
+		var baseUrl = serverUrl.TrimEnd('/');
+		var imagesUrl = string.Concat(baseUrl, "/images");
+
+		var camPng = await ReadbackCameraPngAsync(targetCamera);
+		await Upload(camPng, "cam.png", subjectId, exp, imagesUrl);
+	}
+
+	/// <summary>
+	/// Capture each RenderTexture and upload with exp_id.
+	/// </summary>
+	/// <param name="id">Suffix id to build exp_id as "{ExpId}-{id}".</param>
+	public async Task RenderTexTake(string id)
+	{
+		ValidateState(id);
+		var exp = string.Concat(ExpId, "-", id);
+		var baseUrl = serverUrl.TrimEnd('/');
+		var depthsUrl = string.Concat(baseUrl, "/depths");
+
+		var tasks = new List<Task>(renderTextures.Count);
+		for (int i = 0; i < renderTextures.Count; i++)
 		{
-			ValidateState(id);
-			var exp = string.Concat(ExpId, "-", id);
-			var baseUrl = serverUrl.TrimEnd('/');
-			var imagesUrl = string.Concat(baseUrl, "/images");
-			var depthsUrl = string.Concat(baseUrl, "/depths");
+			var rt = renderTextures[i];
+			if (rt == null) throw new InvalidOperationException("RenderTexture list contains null.");
+			if (rt.format != RenderTextureFormat.RFloat)
+				throw new InvalidOperationException($"RenderTexture[{i}] is not RFloat.");
 
-			// Collect tasks to run in parallel (uploads, and readback->upload chains)
-			var tasks = new List<Task>(1 + renderTextures.Count);
-
-			// 1) Camera capture (async readback) -> start upload task immediately
-			var camPng = await ReadbackCameraPngAsync(targetCamera); // keep on main thread after await
-			tasks.Add(Upload(camPng, "cam.png", subjectId, exp, imagesUrl));
-
-			// 2) Depth RTs: schedule GPU readback + upload per RT, run all in parallel
-			for (int i = 0; i < renderTextures.Count; i++)
-			{
-				var rt = renderTextures[i];
-				if (rt == null) throw new InvalidOperationException("RenderTexture list contains null.");
-				if (rt.format != RenderTextureFormat.RFloat)
-					throw new InvalidOperationException($"RenderTexture[{i}] is not RFloat.");
-
-				int index = i;
-				tasks.Add(UploadDepthForRt(rt, index, subjectId, exp, depthsUrl));
-			}
-
-			// Await all uploads (and readbacks) without blocking main thread
-			await Task.WhenAll(tasks);
+			int index = i;
+			tasks.Add(UploadDepthForRt(rt, index, subjectId, exp, depthsUrl));
 		}
+
+		await Task.WhenAll(tasks);
+	}
 
 		private void ValidateState(string id)
 		{

@@ -51,7 +51,6 @@ public class UIExpManager : MonoBehaviour {
     private void OnPhaseChanged(ExperimentPhase newPhase){
         if (newPhase != ExperimentPhase.EXPERIMENT){
             currentIndex = 0;
-            HideAllUI();
         }
     }
 
@@ -60,12 +59,6 @@ public class UIExpManager : MonoBehaviour {
         if (newMethod != ExperimentMethod.NONE){
             ShowFirstTask();
         }
-    }
-
-    private void HideAllUI(){
-        if (imageDisplay != null) imageDisplay.texture = null;
-        if (instructionText != null) instructionText.text = string.Empty;
-        if (progressText != null) progressText.text = string.Empty;
     }
 
     private void ShowFirstTask(){

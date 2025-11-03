@@ -40,7 +40,14 @@ public class ExperimentOrchestrator : MonoBehaviour {
 
     private void OnPhaseChanged(ExperimentPhase newPhase){
         if (newPhase == ExperimentPhase.END){
-            if (!sendPerMethod){
+            if (sendPerMethod){
+                if (previousMethod != ExperimentMethod.NONE){
+                    foreach (var logger in loggers){
+                        if (logger == null) throw new NullReferenceException("ExperimentOrchestrator: loggers contains null");
+                        logger.SendMethod(previousMethod);
+                    }
+                }
+            } else {
                 foreach (var logger in loggers){
                     if (logger == null) throw new NullReferenceException("ExperimentOrchestrator: loggers contains null");
                     logger.SendAllMethods();

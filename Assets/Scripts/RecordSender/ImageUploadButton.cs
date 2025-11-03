@@ -22,6 +22,7 @@ namespace ImOTAR.RecordSender
 		private const string TimeFmt = "yyyyMMdd_HHmmssfff";
 
 		[SerializeField] private ImageUploader uploader;
+		[SerializeField] private ExperimentPhaseManager phaseMan;
 
 		public UploadStatus Status { get; private set; } = UploadStatus.Idle;
 		public string LastError { get; private set; }
@@ -45,10 +46,24 @@ namespace ImOTAR.RecordSender
 	private async Task RunSnapAsync(string id)
 	{
 		if (uploader == null) throw new InvalidOperationException("ImageUploader is not set.");
+		if (phaseMan == null) throw new InvalidOperationException("ExperimentPhaseManager is not set.");
 		Interlocked.Increment(ref inflight);
 		try
 		{
-			await uploader.Take(id);
+			if (phaseMan.CurrPhase == ExperimentPhase.TUTORIAL)
+			{
+				await uploader.CameraTake(id);
+			}
+			else if (phaseMan.CurrPhase == ExperimentPhase.EXPERIMENT)
+			{
+				await uploader.CameraTake(id);
+				await uploader.RenderTexTake(id);
+			}
+			else
+			{
+				throw new InvalidOperationException($"Invalid phase: {phaseMan.CurrPhase}");
+			}
+
 			if (Interlocked.Decrement(ref inflight) == 0)
 			{
 				Status = UploadStatus.Success;
