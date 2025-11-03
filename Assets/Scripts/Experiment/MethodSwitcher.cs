@@ -6,7 +6,7 @@ using UnityEngine;
 public class MethodSwitcher : MonoBehaviour {
     [Serializable]
     public class PipelineEntry {
-        public ExperimentPhase phase;
+        public ExperimentMethod method;
         public GameObject pipeline;
     }
 
@@ -19,26 +19,37 @@ public class MethodSwitcher : MonoBehaviour {
 
         ValidatePipelines();
         phaseManager.OnPhaseChanged += OnPhaseChanged;
+        phaseManager.OnMethodChanged += OnMethodChanged;
     }
 
     private void OnDisable(){
         if (phaseManager != null){
             phaseManager.OnPhaseChanged -= OnPhaseChanged;
+            phaseManager.OnMethodChanged -= OnMethodChanged;
         }
     }
 
     private void ValidatePipelines(){
         foreach (var entry in pipelines){
-            if (entry.phase == ExperimentPhase.NOT_STARTED || entry.phase == ExperimentPhase.END){
-                throw new ArgumentException($"MethodSwitcher: pipelines contains invalid phase {entry.phase}");
+            if (entry.method == ExperimentMethod.NONE){
+                throw new ArgumentException($"MethodSwitcher: pipelines contains invalid method {entry.method}");
             }
         }
     }
 
     private void OnPhaseChanged(ExperimentPhase newPhase){
+        if (newPhase != ExperimentPhase.EXPERIMENT){
+            foreach (var entry in pipelines){
+                if (entry.pipeline == null) throw new NullReferenceException("MethodSwitcher: pipeline GameObject is null");
+                entry.pipeline.SetActive(false);
+            }
+        }
+    }
+
+    private void OnMethodChanged(ExperimentMethod newMethod){
         foreach (var entry in pipelines){
             if (entry.pipeline == null) throw new NullReferenceException("MethodSwitcher: pipeline GameObject is null");
-            entry.pipeline.SetActive(entry.phase == newPhase);
+            entry.pipeline.SetActive(entry.method == newMethod);
         }
     }
 }

@@ -4,6 +4,7 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class ExperimentPhaseManager : MonoBehaviour {
     public event Action<ExperimentPhase> OnPhaseChanged;
+    public event Action<ExperimentMethod> OnMethodChanged;
 
     private ExperimentPhase _currPhase;
     public ExperimentPhase CurrPhase {
@@ -11,6 +12,15 @@ public class ExperimentPhaseManager : MonoBehaviour {
         set {
             _currPhase = value;
             OnPhaseChanged?.Invoke(_currPhase);
+        }
+    }
+
+    private ExperimentMethod _currMethod;
+    public ExperimentMethod CurrMethod {
+        get => _currMethod;
+        set {
+            _currMethod = value;
+            OnMethodChanged?.Invoke(_currMethod);
         }
     }
 

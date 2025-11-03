@@ -1,8 +1,7 @@
 public enum ExperimentPhase {
     NOT_STARTED,
-    BASELINE,
-    NAIVE,
-    PROPOSED,
+    TUTORIAL,
+    EXPERIMENT,
     END
 }
 

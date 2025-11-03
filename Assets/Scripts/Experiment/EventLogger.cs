@@ -31,7 +31,7 @@ namespace dang0.ServerLog {
         [SerializeField] private ExperimentPhaseManager phaseManager;
         [SerializeField] private Sender sender;
 
-        private Dictionary<ExperimentPhase, List<EventEntry>> eventsByPhase = new Dictionary<ExperimentPhase, List<EventEntry>>();
+        private Dictionary<ExperimentMethod, List<EventEntry>> eventsByMethod = new Dictionary<ExperimentMethod, List<EventEntry>>();
         private string subjectId;
         private string experimentId;
         private bool isLogging = false;
@@ -45,42 +45,42 @@ namespace dang0.ServerLog {
             this.subjectId = subjectId;
             this.experimentId = experimentId;
             this.isLogging = true;
-            eventsByPhase.Clear();
+            eventsByMethod.Clear();
         }
 
         public void Caused(string eventName){
             if (!isLogging) throw new InvalidOperationException("EventLogger: StartLogging has not been called");
             if (string.IsNullOrEmpty(eventName)) throw new ArgumentException("eventName is null or empty", nameof(eventName));
 
-            var currentPhase = phaseManager.CurrPhase;
-            if (!eventsByPhase.ContainsKey(currentPhase)){
-                eventsByPhase[currentPhase] = new List<EventEntry>();
+            var currentMethod = phaseManager.CurrMethod;
+            if (!eventsByMethod.ContainsKey(currentMethod)){
+                eventsByMethod[currentMethod] = new List<EventEntry>();
             }
 
             var timestamp = DateTime.Now.ToString(DATE_FORMAT);
-            eventsByPhase[currentPhase].Add(new EventEntry(timestamp, eventName));
+            eventsByMethod[currentMethod].Add(new EventEntry(timestamp, eventName));
         }
 
-        public override void SendPhase(ExperimentPhase phase){
+        public override void SendMethod(ExperimentMethod method){
             if (!isLogging) throw new InvalidOperationException("EventLogger: StartLogging has not been called");
             if (sender == null) throw new NullReferenceException("EventLogger: sender not assigned");
 
-            if (!eventsByPhase.ContainsKey(phase) || eventsByPhase[phase].Count == 0){
+            if (!eventsByMethod.ContainsKey(method) || eventsByMethod[method].Count == 0){
                 return;
             }
 
-            var eventsWrapper = new EventsWrapper(eventsByPhase[phase]);
+            var eventsWrapper = new EventsWrapper(eventsByMethod[method]);
             var eventsJson = JsonUtility.ToJson(eventsWrapper);
-            var phasedPayload = new PhasedPayload(phase, eventsJson);
-            var payload = new Payload(DateTime.Now, subjectId, experimentId, phasedPayload.ToJson());
+            var methodPayload = new MethodPayload(method, eventsJson);
+            var payload = new Payload(DateTime.Now, subjectId, experimentId, methodPayload.ToJson());
             sender.Send(payload);
         }
 
-        public override void SendAllPhases(){
+        public override void SendAllMethods(){
             if (!isLogging) throw new InvalidOperationException("EventLogger: StartLogging has not been called");
 
-            foreach (var phase in eventsByPhase.Keys){
-                SendPhase(phase);
+            foreach (var method in eventsByMethod.Keys){
+                SendMethod(method);
             }
         }
     }

@@ -35,7 +35,7 @@ namespace dang0.ServerLog{
         [SerializeField] private Sender sender;
 
         private MonitorStatus status = MonitorStatus.UNSTARTED;
-        private Dictionary<ExperimentPhase, List<MetricData>> recordedDataByPhase = new Dictionary<ExperimentPhase, List<MetricData>>();
+        private Dictionary<ExperimentMethod, List<MetricData>> recordedDataByMethod = new Dictionary<ExperimentMethod, List<MetricData>>();
         private Coroutine recordingCoroutine;
         private string subjectId;
         private string experimentId;
@@ -52,29 +52,29 @@ namespace dang0.ServerLog{
             this.subjectId = subjectId;
             this.experimentId = experimentId;
             status = MonitorStatus.RECORDING;
-            recordedDataByPhase.Clear();
+            recordedDataByMethod.Clear();
             recordingCoroutine = StartCoroutine(RecordMetrics());
         }
 
-        public override void SendPhase(ExperimentPhase phase){
+        public override void SendMethod(ExperimentMethod method){
             if (sender == null) throw new NullReferenceException("PerformanceMonitor: sender not assigned");
             if (string.IsNullOrEmpty(subjectId)) throw new InvalidOperationException("PerformanceMonitor: StartLogging has not been called");
 
-            if (!recordedDataByPhase.ContainsKey(phase) || recordedDataByPhase[phase].Count == 0){
+            if (!recordedDataByMethod.ContainsKey(method) || recordedDataByMethod[method].Count == 0){
                 return;
             }
 
             try {
-                var jsonArray = ConvertToJsonArray(recordedDataByPhase[phase]);
+                var jsonArray = ConvertToJsonArray(recordedDataByMethod[method]);
                 var timestamp = DateTime.Now.ToString(DATE_FORMAT);
-                var fileName = string.Format(FILE_NAME_FORMAT, timestamp + "_" + phase.ToString());
+                var fileName = string.Format(FILE_NAME_FORMAT, timestamp + "_" + method.ToString());
                 var filePath = Path.Combine(Application.persistentDataPath, fileName);
                 
                 File.WriteAllText(filePath, jsonArray, Encoding.UTF8);
                 Debug.Log($"Performance data saved to: {filePath}");
 
-                var phasedPayload = new PhasedPayload(phase, jsonArray);
-                var payload = new Payload(DateTime.Now, subjectId, experimentId, phasedPayload.ToJson());
+                var methodPayload = new MethodPayload(method, jsonArray);
+                var payload = new Payload(DateTime.Now, subjectId, experimentId, methodPayload.ToJson());
                 sender.Send(payload);
                 status = MonitorStatus.DATA_SENT;
             } catch (Exception ex){
@@ -84,7 +84,7 @@ namespace dang0.ServerLog{
             }
         }
 
-        public override void SendAllPhases(){
+        public override void SendAllMethods(){
             if (string.IsNullOrEmpty(subjectId)) throw new InvalidOperationException("PerformanceMonitor: StartLogging has not been called");
 
             if (status == MonitorStatus.RECORDING){
@@ -95,8 +95,8 @@ namespace dang0.ServerLog{
                 status = MonitorStatus.RECORD_END;
             }
 
-            foreach (var phase in recordedDataByPhase.Keys){
-                SendPhase(phase);
+            foreach (var method in recordedDataByMethod.Keys){
+                SendMethod(method);
             }
         }
 
@@ -140,11 +140,11 @@ namespace dang0.ServerLog{
                 data.SetBatteryStatus(batteryStatus != BatteryStatus.Unknown ? batteryStatus.ToString() : null);
             }
 
-            var currentPhase = phaseManager.CurrPhase;
-            if (!recordedDataByPhase.ContainsKey(currentPhase)){
-                recordedDataByPhase[currentPhase] = new List<MetricData>();
+            var currentMethod = phaseManager.CurrMethod;
+            if (!recordedDataByMethod.ContainsKey(currentMethod)){
+                recordedDataByMethod[currentMethod] = new List<MetricData>();
             }
-            recordedDataByPhase[currentPhase].Add(data);
+            recordedDataByMethod[currentMethod].Add(data);
         }
 
         private string ConvertToJsonArray(List<MetricData> dataList){

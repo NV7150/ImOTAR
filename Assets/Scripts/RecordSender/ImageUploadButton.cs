@@ -12,11 +12,19 @@ namespace ImOTAR.RecordSender
 	/// </summary>
 	public sealed class ImageUploadButton : MonoBehaviour
 	{
+		public enum UploadStatus {
+			Idle,
+			Uploading,
+			Success,
+			Error
+		}
+
 		private const string TimeFmt = "yyyyMMdd_HHmmssfff";
 
 		[SerializeField] private ImageUploader uploader;
 
-		public bool IsUploadEnd { get; private set; } = true;
+		public UploadStatus Status { get; private set; } = UploadStatus.Idle;
+		public string LastError { get; private set; }
 
 		private int inflight = 0;
 
@@ -25,6 +33,8 @@ namespace ImOTAR.RecordSender
 		/// </summary>
 		public void Snap()
 		{
+			Status = UploadStatus.Uploading;
+			LastError = null;
 			var id = DateTime.UtcNow.ToString(TimeFmt, CultureInfo.InvariantCulture);
 			_ = RunSnapAsync(id).ContinueWith(
 				t => Debug.LogException(t.Exception),
@@ -32,23 +42,28 @@ namespace ImOTAR.RecordSender
 			);
 		}
 
-		private async Task RunSnapAsync(string id)
+	private async Task RunSnapAsync(string id)
+	{
+		if (uploader == null) throw new InvalidOperationException("ImageUploader is not set.");
+		Interlocked.Increment(ref inflight);
+		try
 		{
-			if (uploader == null) throw new InvalidOperationException("ImageUploader is not set.");
-			Interlocked.Increment(ref inflight);
-			IsUploadEnd = false;
-			try
+			await uploader.Take(id);
+			if (Interlocked.Decrement(ref inflight) == 0)
 			{
-				await uploader.Take(id);
-			}
-			finally
-			{
-				if (Interlocked.Decrement(ref inflight) == 0)
-				{
-					IsUploadEnd = true;
-				}
+				Status = UploadStatus.Success;
 			}
 		}
+		catch (Exception ex)
+		{
+			LastError = $"Upload failed: {ex.Message}";
+			if (Interlocked.Decrement(ref inflight) == 0)
+			{
+				Status = UploadStatus.Error;
+			}
+			throw;
+		}
+	}
 	}
 }
 

@@ -27,19 +27,19 @@ namespace dang0.ServerLog {
         }
 
         private void OnGenerate(){
-            if (phaseManager.CurrPhase == ExperimentPhase.PROPOSED){
+            if (phaseManager.CurrMethod == ExperimentMethod.PROPOSED){
                 eventLogger.Caused("OnGenerate");
             }
         }
 
         private void OnGenerateEnd(){
-            if (phaseManager.CurrPhase == ExperimentPhase.PROPOSED){
+            if (phaseManager.CurrMethod == ExperimentMethod.PROPOSED){
                 eventLogger.Caused("OnGenerateEnd");
             }
         }
 
         private void OnDiscard(){
-            if (phaseManager.CurrPhase == ExperimentPhase.PROPOSED){
+            if (phaseManager.CurrMethod == ExperimentMethod.PROPOSED){
                 eventLogger.Caused("OnDiscard");
             }
         }
