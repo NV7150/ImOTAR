@@ -73,8 +73,25 @@ public static class IntrinsicScaler {
         // W
         P[3,0] =  0f;
         P[3,1] =  0f;
-        P[3,2] =  1f;   // ← ここを +1 に修正（D3D/Metalスタイル）
+        P[3,2] =  1f;   // D3D/Metal スタイルのまま（現行挙動）
         P[3,3] =  0f;
+
+        // --- Alternative (commented out): OpenGL-like Z/W rows before GL.GetGPUProjectionMatrix ---
+        // Use these instead of the above Z/W if you want P to be Unity-standard (OpenGL-like),
+        // then let GL.GetGPUProjectionMatrix(P, true) handle platform/reversed-Z conversion.
+        // Keeping commented to allow quick toggle for verification.
+        //
+        // // Z (OpenGL-like)
+        // P[2,0] =  0f;
+        // P[2,1] =  0f;
+        // P[2,2] =  (f + n) / (n - f);
+        // P[2,3] =  (2f * f * n) / (n - f);
+        //
+        // // W (OpenGL-like)
+        // P[3,0] =  0f;
+        // P[3,1] =  0f;
+        // P[3,2] = -1f;
+        // P[3,3] =  0f;
 
         // 最後にGPU空間に合わせる
         return GL.GetGPUProjectionMatrix(P, true);

@@ -210,6 +210,12 @@ public class SplatBaseCorrector : FrameProvider {
         // int zTest = SystemInfo.usesReversedZBuffer ? (int)UnityEngine.Rendering.CompareFunction.GreaterEqual : (int)UnityEngine.Rendering.CompareFunction.LessEqual;
         int zTest = !SystemInfo.usesReversedZBuffer ? (int)UnityEngine.Rendering.CompareFunction.GreaterEqual : (int)UnityEngine.Rendering.CompareFunction.LessEqual;
         splatTransformMaterial.SetInt(_propZTest, zTest);
+        // --- Alternative (commented out): Spec-compliant ZTest for Reversed-Z ---
+        // Use this if projection P is OpenGL-like before GL.GetGPUProjectionMatrix.
+        // int zTestSpec = SystemInfo.usesReversedZBuffer
+        //     ? (int)UnityEngine.Rendering.CompareFunction.GreaterEqual
+        //     : (int)UnityEngine.Rendering.CompareFunction.LessEqual;
+        // splatTransformMaterial.SetInt(_propZTest, zTestSpec);
 
         splatTransformMaterial.SetBuffer(_propPoints, _currentSplat.PointsBuffer);
         splatTransformMaterial.SetFloat(_propFx, scaledIntrinsics.fxPx);
@@ -220,9 +226,8 @@ public class SplatBaseCorrector : FrameProvider {
         splatTransformMaterial.SetInt(_propH, outputMeters.height);
         splatTransformMaterial.SetMatrix(_propR, Matrix4x4.Rotate(relRotSC));
         splatTransformMaterial.SetVector(_propT, relPos);
-        // NOTE: Passing scaled intrinsics here can lead to double-scaling in BuildProjectionMatrix,
-        // which also scales internally. Left as-is for legacy; if re-enabling, switch to raw intrinsics.
-        splatTransformMaterial.SetMatrix(_propProj, IntrinsicScaler.BuildProjectionMatrix(scaledIntrinsics, outputMeters.width, outputMeters.height, nearMeters, farMeters));
+        // Use raw intrinsics here to avoid double scaling inside BuildProjectionMatrix
+        splatTransformMaterial.SetMatrix(_propProj, IntrinsicScaler.BuildProjectionMatrix(intrinsics, outputMeters.width, outputMeters.height, nearMeters, farMeters));
 
         // Draw to output
         var active = RenderTexture.active;
@@ -232,6 +237,10 @@ public class SplatBaseCorrector : FrameProvider {
         float clearDepthValue = !SystemInfo.usesReversedZBuffer ? 0f : 1f;
         var cb = new CommandBuffer();
         cb.ClearRenderTarget(true, true, new Color(-1f, -1f, -1f, 1f), clearDepthValue);
+        // --- Alternative (commented out): Spec-compliant clear depth for Reversed-Z ---
+        // float clearDepthSpec = SystemInfo.usesReversedZBuffer ? 0f : 1f;
+        // var cb = new CommandBuffer();
+        // cb.ClearRenderTarget(true, true, new Color(-1f, -1f, -1f, 1f), clearDepthSpec);
         Graphics.ExecuteCommandBuffer(cb);
         cb.Release();
         int vertexCount = _currentSplat.Count * 6; // 2 triangles per quad

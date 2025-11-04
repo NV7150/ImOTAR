@@ -1040,7 +1040,7 @@ MonoBehaviour:
   structureManager: {fileID: 1861865039}
   poseDiff: {fileID: 337615850}
   outputMeters: {fileID: 8400000, guid: 0c06b4f5c3e1c44979a73699b993d424, type: 2}
-  splatTransformMaterial: {fileID: 2100000, guid: 4ac46aa08e24344dc9007287b3ecb50a, type: 2}
+  splatTransformMaterial: {fileID: 2100000, guid: 99312ff57f7e7452f90d94d94af0037a, type: 2}
   intrinsicProvider: {fileID: 167201100}
   nearMeters: 0.01
   farMeters: 20
@@ -7174,7 +7174,7 @@ MonoBehaviour:
   structureManager: {fileID: 129897545}
   poseDiff: {fileID: 535656709}
   outputMeters: {fileID: 8400000, guid: 0c06b4f5c3e1c44979a73699b993d424, type: 2}
-  splatTransformMaterial: {fileID: 2100000, guid: 4ac46aa08e24344dc9007287b3ecb50a, type: 2}
+  splatTransformMaterial: {fileID: 2100000, guid: 99312ff57f7e7452f90d94d94af0037a, type: 2}
   intrinsicProvider: {fileID: 2135528722}
   nearMeters: 0.01
   farMeters: 20

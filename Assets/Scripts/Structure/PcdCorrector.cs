@@ -146,6 +146,8 @@ public class PcdCorrector : FrameProvider {
         if (verboseLogging) {
             Debug.Log($"{logPrefix} Original intrinsics: fx={intrinsics.fxPx:F2} fy={intrinsics.fyPx:F2} cx={intrinsics.cxPx:F2} cy={intrinsics.cyPx:F2} res={intrinsics.width}x{intrinsics.height}");
             Debug.Log($"{logPrefix} Scaled intrinsics: fx={scaledIntrinsics.fxPx:F2} fy={scaledIntrinsics.fyPx:F2} cx={scaledIntrinsics.cxPx:F2} cy={scaledIntrinsics.cyPx:F2} res={scaledIntrinsics.width}x{scaledIntrinsics.height}");
+            Debug.Log($"{logPrefix} Rotation Euler: {relRotSC.eulerAngles}");
+            Debug.Log($"{logPrefix} cy/height ratio: {scaledIntrinsics.cyPx / outputMeters.height:F4} (should be ~0.5)");
         }
 
         int zTest = !SystemInfo.usesReversedZBuffer ? (int)CompareFunction.GreaterEqual : (int)CompareFunction.LessEqual;
@@ -161,6 +163,8 @@ public class PcdCorrector : FrameProvider {
         splatTransformMaterial.SetMatrix(_propR, Matrix4x4.Rotate(relRotSC));
         splatTransformMaterial.SetVector(_propT, relPos);
         splatTransformMaterial.SetMatrix(_propProj, IntrinsicScaler.BuildProjectionMatrix(intrinsics, outputMeters.width, outputMeters.height, nearMeters, farMeters));
+        splatTransformMaterial.SetFloat("_Near", nearMeters);
+        splatTransformMaterial.SetFloat("_Far", farMeters);
 
         var active = RenderTexture.active;
         RenderTexture.active = outputMeters;
