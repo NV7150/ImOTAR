@@ -29,7 +29,8 @@ public abstract class IntrinsicProviderBase : IntrinsicProvider {
             Matrix4x4 P = new Matrix4x4();
             P[0,0] = 2f * intrinsics.fxPx / W;
             P[0,1] = 0f;
-            P[0,2] = 1f - (2f * intrinsics.cxPx / W);
+            // P[0,2] = 1f - (2f * intrinsics.cxPx / W);
+            P[0,2] = (2f * intrinsics.cxPx / W) - 1f;
             P[0,3] = 0f;
 
             P[1,0] = 0f;

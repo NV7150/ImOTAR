@@ -55,7 +55,6 @@ public static class IntrinsicScaler {
         // X
         P[0,0] =  2f * scaledIntrinsics.fxPx / W;
         P[0,1] =  0f;
-        // P[0,2] =  1f - (2f * scaledIntrinsics.cxPx / W);
         P[0,2] = (2f * scaledIntrinsics.cxPx / W) - 1f;
         P[0,3] =  0f;
 

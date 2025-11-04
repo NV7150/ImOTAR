@@ -8,9 +8,11 @@ public class ImageAnchorContentAligner : MonoBehaviour
     [SerializeField] private Transform contentRoot;        // 180度展開するコンテンツの親
     [SerializeField] private string targetImageName;       // 対象マーカ名 (空なら最初に見つかった一枚を使う)
     [SerializeField] private float yOffset;                // マーカーローカル+Z方向へのオフセット
+    [SerializeField] private float smoothingSpeed = 8f;
 
     private ARAnchor currentAnchor;
     private bool isAligned;
+    private TrackableId alignedImageId = TrackableId.invalidId;
 
     private void OnEnable()
     {
@@ -30,28 +32,24 @@ public class ImageAnchorContentAligner : MonoBehaviour
 
     private void OnTrackablesChanged(ARTrackablesChangedEventArgs<ARTrackedImage> args)
     {
-        if (isAligned || contentRoot == null)
+        if (contentRoot == null)
             return;
 
         // 追加と更新の両方で位置合わせを試す
         foreach (var img in args.added)
         {
             TryAlignToImage(img);
-            if (isAligned) return;
         }
 
         foreach (var img in args.updated)
         {
             TryAlignToImage(img);
-            if (isAligned) return;
         }
+
     }
 
     private void TryAlignToImage(ARTrackedImage image)
     {
-        if (isAligned)
-            return;
-
         // 対象画像名のフィルタ
         if (!string.IsNullOrEmpty(targetImageName) &&
             image.referenceImage.name != targetImageName)
@@ -59,22 +57,55 @@ public class ImageAnchorContentAligner : MonoBehaviour
             return;
         }
 
+        if (isAligned && alignedImageId != TrackableId.invalidId && image.trackableId != alignedImageId)
+        {
+            return;
+        }
+
         // きちんとトラッキングできている時だけ使う
         if (image.trackingState != TrackingState.Tracking)
+        {
+            if (alignedImageId == image.trackableId)
+            {
+                isAligned = false;
+                alignedImageId = TrackableId.invalidId;
+            }
             return;
+        }
 
-        // アンカー用オブジェクトを作成し，マーカ位置に配置
-        var anchorObject = new GameObject("ContentAnchor");
+        // アンカー用オブジェクトを生成または再利用
+        if (currentAnchor == null)
+        {
+            var anchorObject = new GameObject("ContentAnchor");
+            currentAnchor = anchorObject.AddComponent<ARAnchor>();
+        }
+
+        Vector3 targetPosition = image.transform.position;
         Quaternion adjustedRotation = image.transform.rotation * Quaternion.Euler(90f, 0f, 0f);
-        anchorObject.transform.SetPositionAndRotation(image.transform.position, adjustedRotation);
 
-        currentAnchor = anchorObject.AddComponent<ARAnchor>();
+        if (!isAligned)
+        {
+            currentAnchor.transform.SetPositionAndRotation(targetPosition, adjustedRotation);
+        }
+        else
+        {
+            float lerpFactor = smoothingSpeed <= 0f ? 1f : 1f - Mathf.Exp(-smoothingSpeed * Time.deltaTime);
+            Vector3 smoothedPosition = Vector3.Lerp(currentAnchor.transform.position, targetPosition, lerpFactor);
+            Quaternion smoothedRotation = Quaternion.Slerp(currentAnchor.transform.rotation, adjustedRotation, lerpFactor);
+            currentAnchor.transform.SetPositionAndRotation(smoothedPosition, smoothedRotation);
+        }
 
-        // コンテンツ親をアンカーの子にして位置合わせ
-        // contentRoot は原点周りに配置しておくことを想定
-        contentRoot.SetParent(currentAnchor.transform, worldPositionStays: false);
+        float distanceToTarget = Vector3.Distance(currentAnchor.transform.position, targetPosition);
+        float angleToTarget = Quaternion.Angle(currentAnchor.transform.rotation, adjustedRotation);
+        Debug.Log($"[ImageAnchorContentAligner] name={image.referenceImage.name} distance={distanceToTarget:F4} angle={angleToTarget:F2} scale={contentRoot.lossyScale}");
+
+        if (contentRoot.parent != currentAnchor.transform)
+        {
+            contentRoot.SetParent(currentAnchor.transform, worldPositionStays: false);
+        }
+
         contentRoot.localPosition = new Vector3(0f, 0f, yOffset);
-
+        alignedImageId = image.trackableId;
         isAligned = true;
     }
 }
