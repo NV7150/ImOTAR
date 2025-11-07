@@ -44,6 +44,7 @@ public class ARCameraIntrinsicProvider : IntrinsicProviderBase {
                 _cxPx = intr.principalPoint.x;
                 _cyPx = intr.principalPoint.y;
                 _hasIntrinsics = true;
+                Debug.Log($"{nameof(ARCameraIntrinsicProvider)}: Obtained intrinsics: {intr.focalLength.x}, {intr.focalLength.y} focal length, {intr.principalPoint.x}, {intr.principalPoint.y} principal point, {res} resolution");
             }
         }
     }
