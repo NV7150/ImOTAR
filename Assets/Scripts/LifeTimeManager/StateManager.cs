@@ -8,7 +8,8 @@ public enum State {
 }
 
 public  class StateManager : MonoBehaviour {
-    public State CurrState { get; private set; }
+    public State CurrState { get => _currState; private set{ _currState = value; } }
+    private State _currState = State.INACTIVE;
 
     public void Generate(){
         if(CurrState != State.INACTIVE)

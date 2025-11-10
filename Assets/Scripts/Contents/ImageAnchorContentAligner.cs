@@ -97,7 +97,7 @@ public class ImageAnchorContentAligner : MonoBehaviour
 
         float distanceToTarget = Vector3.Distance(currentAnchor.transform.position, targetPosition);
         float angleToTarget = Quaternion.Angle(currentAnchor.transform.rotation, adjustedRotation);
-        Debug.Log($"[ImageAnchorContentAligner] name={image.referenceImage.name} distance={distanceToTarget:F4} angle={angleToTarget:F2} scale={contentRoot.lossyScale}");
+        // Debug.Log($"[ImageAnchorContentAligner] name={image.referenceImage.name} distance={distanceToTarget:F4} angle={angleToTarget:F2} scale={contentRoot.lossyScale}");
 
         if (contentRoot.parent != currentAnchor.transform)
         {

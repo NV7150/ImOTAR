@@ -5,6 +5,48 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/Experiments/Exp2/Experiment2-ARKit.unity
+    guid: e69227ea6e8a94096ab11844cf2e7c9e
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Exp2/Experiment2-HighNaive.unity
+    guid: 15eaf4f9a79c347789b558cb62e759be
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Exp2/Experiment2-HighProposed.unity
+    guid: 04529ab81470c4c0c9c703d853d50c2e
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Exp2/Experiment2-LowNaive.unity
+    guid: 55a2b19c3b79541329f97ca3c231699e
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Exp2/Experiment2-LowProposed.unity
+    guid: 5425da1de793f44179f70e12006a5893
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Exp2/Experiment2-MiddleNaive.unity
+    guid: fd1fe824424b64d53a765b2a71798992
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Exp2/Experiment2-MiddleProposed.unity
+    guid: 7f2b7906271d649e093d61386ea1e37a
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Exp2-Rec/Experiment2-ARKit-rec.unity
+    guid: 0d9b1ea18ca544a2894c090766fba417
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Exp2-Rec/Experiment2-HighNaive-rec.unity
+    guid: 1bfcf32c5086447c1ba0445eb1632ec8
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Exp2-Rec/Experiment2-HighProposed-rec.unity
+    guid: 4f51f0238a1704a50b563826d200868f
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Exp2-Rec/Experiment2-LowNaive-rec.unity
+    guid: b90495372c1ab40c49a2051f90c943b5
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Exp2-Rec/Experiment2-LowProposed-rec.unity
+    guid: 3ec30e12e449f47069320f9a1aefc32e
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Exp2-Rec/Experiment2-MiddleNaive-rec.unity
+    guid: 58ecfe2cf67724be998394a741567b3d
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Exp2-Rec/Experiment2-MiddleProposed-rec.unity
+    guid: 4057fda64b85d48d688a5e6d8f89e242
   - enabled: 0
     path: Assets/Scenes/CameraTest.unity
     guid: 99c9720ab356a0642a771bea13969a05
@@ -80,9 +122,12 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/Experiments/Experiment1-Calibration.unity
     guid: e702eb2fabc184185a8c6a431a5de147
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Experiments/Experiment2-SnapApp.unity
     guid: 58c0155428aa645c39aaf6bb1c7eb568
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Experiment2-Record.unity
+    guid: ae83dff68fccf4720be8d563b125aa5a
   m_configObjects:
     UnityEditor.XR.ARCore.ARCoreSettings: {fileID: 11400000, guid: e71a044b8587441c58abd76a26eb971d, type: 2}
     UnityEditor.XR.ARKit.ARKitSettings: {fileID: 11400000, guid: c8b7a705697ad4ddebe33ba1efd63d78, type: 2}

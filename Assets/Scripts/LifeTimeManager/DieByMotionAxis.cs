@@ -16,6 +16,14 @@ public class DieByMotionAxis : MonoBehaviour {
     [Header("Thresholds")]
     [SerializeField] private Vector3 rotDegThreshDeg = new Vector3(5f, 5f, 5f);
     [SerializeField] private Vector3 posThreshMeters = new Vector3(0.03f, 0.03f, 0.03f);
+    [Tooltip("Pitch + direction threshold (deg). Euler mode only.")]
+    [SerializeField] private float rotPitchPosThreshDeg = 5f;
+    [Tooltip("Pitch - direction threshold (deg). Euler mode only.")]
+    [SerializeField] private float rotPitchNegThreshDeg = 5f;
+    [Tooltip("Z + direction translation threshold (m).")]
+    [SerializeField] private float posZPosThreshMeters = 0.03f;
+    [Tooltip("Z - direction translation threshold (m).")]
+    [SerializeField] private float posZNegThreshMeters = 0.03f;
 
     [Header("Rotation Mode")]
     [SerializeField] private RotationProjection rotationProjection = RotationProjection.Euler;
@@ -40,22 +48,44 @@ public class DieByMotionAxis : MonoBehaviour {
         
         if (!poseDiff.TryGetDiffFrom(guid, out var trans, out var rot)) 
             return;
+        bool dieRot = false;
+        bool diePos = false;
 
-        // Evaluate rotation threshold per-axis
-        Vector3 rotAxisValuesDeg = GetRotationAxisValuesDeg(rot);
-        bool dieRot = (Mathf.Abs(rotAxisValuesDeg.x) >= rotDegThreshDeg.x)
-                   || (Mathf.Abs(rotAxisValuesDeg.y) >= rotDegThreshDeg.y)
-                   || (Mathf.Abs(rotAxisValuesDeg.z) >= rotDegThreshDeg.z);
+        // Rotation evaluation
+        if (rotationProjection == RotationProjection.Euler){
+            Vector3 e = GetRotationAxisValuesDeg(rot); // normalized Euler
+            float pitch = e.x;
+            bool dieRotPitchPos = (pitch > 0f) && (pitch >= rotPitchPosThreshDeg);
+            bool dieRotPitchNeg = (pitch < 0f) && (Mathf.Abs(pitch) >= rotPitchNegThreshDeg);
+            bool dieRotOther = (Mathf.Abs(e.y) >= rotDegThreshDeg.y) || (Mathf.Abs(e.z) >= rotDegThreshDeg.z);
+            dieRot = dieRotPitchPos || dieRotPitchNeg || dieRotOther;
+        } else {
+            // RotationVector mode retains original absolute axis threshold logic
+            Vector3 rv = GetRotationAxisValuesDeg(rot);
+            dieRot = (Mathf.Abs(rv.x) >= rotDegThreshDeg.x)
+                  || (Mathf.Abs(rv.y) >= rotDegThreshDeg.y)
+                  || (Mathf.Abs(rv.z) >= rotDegThreshDeg.z);
+        }
 
-        // Evaluate translation threshold per-axis (current-local axes)
+        // Translation evaluation
         Vector3 t = trans;
-        bool diePos = (Mathf.Abs(t.x) >= posThreshMeters.x)
-                   || (Mathf.Abs(t.y) >= posThreshMeters.y)
-                   || (Mathf.Abs(t.z) >= posThreshMeters.z);
+        bool diePosZPos = t.z >= posZPosThreshMeters;
+        bool diePosZNeg = t.z <= -posZNegThreshMeters;
+        bool diePosXY = (Mathf.Abs(t.x) >= posThreshMeters.x) || (Mathf.Abs(t.y) >= posThreshMeters.y);
+        diePos = diePosZPos || diePosZNeg || diePosXY;
 
         if (dieRot || diePos){
             if (logVerbose){
-                Debug.Log($"{logPrefix} DIE: rot=({rotAxisValuesDeg.x:F2},{rotAxisValuesDeg.y:F2},{rotAxisValuesDeg.z:F2})deg thr=({rotDegThreshDeg.x:F2},{rotDegThreshDeg.y:F2},{rotDegThreshDeg.z:F2}) | pos=({t.x:F3},{t.y:F3},{t.z:F3})m thr=({posThreshMeters.x:F3},{posThreshMeters.y:F3},{posThreshMeters.z:F3})");
+                if (rotationProjection == RotationProjection.Euler){
+                    Vector3 e = rot.eulerAngles;
+                    e.x = Normalize180(e.x);
+                    e.y = Normalize180(e.y);
+                    e.z = Normalize180(e.z);
+                    Debug.Log($"{logPrefix} DIE: pitch={e.x:F2}deg thr(+{rotPitchPosThreshDeg:F2}/-{rotPitchNegThreshDeg:F2}) | rotY={e.y:F2}/{rotDegThreshDeg.y:F2} rotZ={e.z:F2}/{rotDegThreshDeg.z:F2} | posXY=({t.x:F3},{t.y:F3}) thr=({posThreshMeters.x:F3},{posThreshMeters.y:F3}) | posZ={t.z:F3}m thr(+{posZPosThreshMeters:F3}/-{posZNegThreshMeters:F3})");
+                } else {
+                    Vector3 rv = GetRotationAxisValuesDeg(rot);
+                    Debug.Log($"{logPrefix} DIE: rotRV=({rv.x:F2},{rv.y:F2},{rv.z:F2})deg thr=({rotDegThreshDeg.x:F2},{rotDegThreshDeg.y:F2},{rotDegThreshDeg.z:F2}) | pos=({t.x:F3},{t.y:F3},{t.z:F3})m thrXY=({posThreshMeters.x:F3},{posThreshMeters.y:F3}) thrZ(+{posZPosThreshMeters:F3}/-{posZNegThreshMeters:F3})");
+                }
             }
             state.Discard();
         }
@@ -100,6 +130,10 @@ public class DieByMotionAxis : MonoBehaviour {
     }
 
     public void SetRotThreshEulerDeg(Vector3 eulerDeg){
+        // X component maps to pitch positive/negative thresholds (both same) for backward compatibility
+        float pitchAbs = Mathf.Abs(Normalize180(eulerDeg.x));
+        rotPitchPosThreshDeg = pitchAbs;
+        rotPitchNegThreshDeg = pitchAbs;
         rotDegThreshDeg = new Vector3(Mathf.Abs(eulerDeg.x), Mathf.Abs(eulerDeg.y), Mathf.Abs(eulerDeg.z));
     }
 
@@ -127,7 +161,23 @@ public class DieByMotionAxis : MonoBehaviour {
     }
 
     public void SetPosThreshMeters(Vector3 meters){
+        posZPosThreshMeters = Mathf.Abs(meters.z);
+        posZNegThreshMeters = Mathf.Abs(meters.z);
         posThreshMeters = new Vector3(Mathf.Abs(meters.x), Mathf.Abs(meters.y), Mathf.Abs(meters.z));
+    }
+
+    // Pitch specific setter (Euler mode only logical usage)
+    public void SetRotPitchThreshDeg(float posDeg, float negDeg){
+        if (posDeg < 0f || negDeg < 0f) throw new ArgumentException("DieByMotionAxis: pitch thresholds must be >=0");
+        rotPitchPosThreshDeg = posDeg;
+        rotPitchNegThreshDeg = negDeg;
+    }
+
+    // Z translation specific setter
+    public void SetPosZThreshMeters(float pos, float neg){
+        if (pos < 0f || neg < 0f) throw new ArgumentException("DieByMotionAxis: Z thresholds must be >=0");
+        posZPosThreshMeters = pos;
+        posZNegThreshMeters = neg;
     }
 }
 
