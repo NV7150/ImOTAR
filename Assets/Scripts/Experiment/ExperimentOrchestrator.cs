@@ -84,6 +84,10 @@ public class ExperimentOrchestrator : MonoBehaviour {
             throw new InvalidOperationException("ExperimentOrchestrator: Cannot call NextPhase before experiment starts");
         }
 
+        if (currentPhase == ExperimentPhase.INTERMIDIATE){
+            throw new InvalidOperationException("ExperimentOrchestrator: NextPhase called during INTERMIDIATE. Call Resume() instead");
+        }
+
         if (currentPhase == ExperimentPhase.END){
             return;
         }
@@ -98,10 +102,29 @@ public class ExperimentOrchestrator : MonoBehaviour {
         currentMethodIndex++;
 
         if (currentMethodIndex >= starter.RandomizedMethods.Count){
+            // No more methods: finalize experiment.
             phaseManager.CurrPhase = ExperimentPhase.END;
         } else {
-            phaseManager.CurrMethod = starter.RandomizedMethods[currentMethodIndex];
+            // There is a next method: insert intermission between methods.
+            phaseManager.CurrPhase = ExperimentPhase.INTERMIDIATE;
         }
+    }
+
+    /// <summary>
+    /// Resume from INTERMIDIATE to next method in EXPERIMENT. Only valid when current phase is INTERMIDIATE.
+    /// </summary>
+    public void Resume(){
+        ExperimentPhase phase = phaseManager.CurrPhase;
+        if (phase == ExperimentPhase.END) return; // already ended
+        if (phase != ExperimentPhase.INTERMIDIATE) throw new InvalidOperationException("ExperimentOrchestrator: Resume() called when phase is not INTERMIDIATE");
+
+        if (currentMethodIndex < 0 || currentMethodIndex >= starter.RandomizedMethods.Count){
+            throw new InvalidOperationException("ExperimentOrchestrator: Resume() invalid method index");
+        }
+
+        // Return to experiment and set the next method now.
+        phaseManager.CurrPhase = ExperimentPhase.EXPERIMENT;
+        phaseManager.CurrMethod = starter.RandomizedMethods[currentMethodIndex];
     }
 }
 

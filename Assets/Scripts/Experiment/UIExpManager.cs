@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using ImOTAR.RecordSender;
+using UnityEngine.Events;
 
 [DisallowMultipleComponent]
 public class UIExpManager : MonoBehaviour {
@@ -19,6 +20,9 @@ public class UIExpManager : MonoBehaviour {
     [SerializeField] private RawImage imageDisplay;
     [SerializeField] private TextMeshProUGUI instructionText;
     [SerializeField] private TextMeshProUGUI progressText;
+    [SerializeField] private UnityEvent onTaskChanged;
+
+    public UnityEvent OnTaskChanged => onTaskChanged;
 
     public event Action OnAllTasksCompleted;
 
@@ -64,6 +68,7 @@ public class UIExpManager : MonoBehaviour {
     private void ShowFirstTask(){
         if (tasks.Count == 0) throw new InvalidOperationException("UIExpManager: tasks list is empty");
         UpdateUI();
+        onTaskChanged?.Invoke();
     }
 
     public void NextTask(){
@@ -83,6 +88,7 @@ public class UIExpManager : MonoBehaviour {
         }
 
         UpdateUI();
+        onTaskChanged?.Invoke();
     }
 
     private void UpdateUI(){

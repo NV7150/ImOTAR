@@ -11,6 +11,7 @@ public class ExperimentStarter : MonoBehaviour {
     [SerializeField] private ExperimentPhaseManager phaseManager;
 
     public string ExperimentId { get; set; }
+    public string SubjectId => subjectId;
 
     private List<ExperimentMethod> randomizedMethods;
 
@@ -40,7 +41,8 @@ public class ExperimentStarter : MonoBehaviour {
         randomizedMethods = new List<ExperimentMethod> {
             ExperimentMethod.BASELINE,
             ExperimentMethod.NAIVE,
-            ExperimentMethod.PROPOSED
+            ExperimentMethod.PROPOSED,
+            ExperimentMethod.NAIVE_LOW
         };
 
         for (int i = randomizedMethods.Count - 1; i > 0; i--){

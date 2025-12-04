@@ -168,7 +168,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1344c3c82d62a2a41a3576d8abb8e3ea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Material: {fileID: 2100000, guid: 6113890ed6f414cd2b65189f28cd0231, type: 2}
+  m_Material: {fileID: 2100000, guid: 3d5f3958669314391a07e9f8eff7a2d0, type: 2}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
@@ -708,12 +708,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2466e51aa7ef848f999d43225e40710e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  promptDaOnnx: {fileID: 5022602860645237092, guid: 158d4f47e8d80400a813be289ca10d4b, type: 3}
+  promptDaOnnx: {fileID: 5022602860645237092, guid: 59b66fc7a1fd2434aa70c50a02d842f0, type: 3}
   testImg: {fileID: 2800000, guid: 0ca93ad875f084ce99bcd2b0870b50bb, type: 3}
   testDepth: {fileID: 2800000, guid: d701d6d54440d450fbc6086d8cef5a0d, type: 3}
-  visualizeTexture: {fileID: 8400000, guid: 44200fc5c4ed8458fac853e04cefe105, type: 2}
-  onnxWidth: 1288
-  onnxHeight: 728
+  visualizeTexture: {fileID: 8400000, guid: 65ac76abb68e54d62b9a6daeffe41aeb, type: 2}
+  onnxWidth: 672
+  onnxHeight: 896
 --- !u!4 &1813797594
 Transform:
   m_ObjectHideFlags: 0

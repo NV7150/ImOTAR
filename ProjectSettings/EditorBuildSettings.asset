@@ -5,7 +5,7 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Experiments/Exp2/Experiment2-ARKit.unity
     guid: e69227ea6e8a94096ab11844cf2e7c9e
   - enabled: 0
@@ -47,6 +47,12 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/Experiments/Exp2-Rec/Experiment2-MiddleProposed-rec.unity
     guid: 4057fda64b85d48d688a5e6d8f89e242
+  - enabled: 0
+    path: Assets/Scenes/Experiments/Experiment3-SnapAround.unity
+    guid: 03d172865f7ad41239fe5b2fe929aa2f
+  - enabled: 1
+    path: Assets/Scenes/Experiments/Experiment3-CameraFps.unity
+    guid: 0481f588e77ec496782e0fa27105909c
   - enabled: 0
     path: Assets/Scenes/CameraTest.unity
     guid: 99c9720ab356a0642a771bea13969a05
