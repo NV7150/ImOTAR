@@ -166,10 +166,10 @@ public class FilteredStructureManager : StructureManager {
         filterCreator.Dispatch(_kernel, gx, gy, 1);
 
         // read valid count (for debug) and dispose
-        uint[] countData = new uint[1];
-        validCount.GetData(countData);
-        if (verboseLogging) Debug.Log($"{logPrefix} Valid points: {countData[0]} / {count}");
-        validCount.Dispose();
+        // uint[] countData = new uint[1];
+        // validCount.GetData(countData);
+        // if (verboseLogging) Debug.Log($"{logPrefix} Valid points: {countData[0]} / {count}");
+        // validCount.Dispose();
 
         // replace current splat
         if (_currentSplat != null){

@@ -81,5 +81,5 @@ MonoBehaviour:
   m_Active: 1
   settings:
     applyMaterial: {fileID: 2100000, guid: d533df5a414ff43cc834088611ea2799, type: 2}
-    sourceRT: {fileID: 8400000, guid: ac700ccc1202c4a8bab7e6a0703d50f2, type: 2}
+    sourceRT: {fileID: 8400000, guid: e88b09159614b465caa2ceb0852491cf, type: 2}
     runOnEditor: 0
